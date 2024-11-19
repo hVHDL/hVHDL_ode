@@ -46,29 +46,43 @@ begin
         variable u_in : real := 10.0;
         variable i_load : real := 0.0;
 
-        variable uin          : real_vector(0 to 2) := (0.0 , 0.0 , 0.0);
+        variable uin          : real_vector(1 to 3) := (0.0 , 0.0 , 0.0);
         variable state_vector : real_vector(0 to 5) := (others => 0.0);
 
-        constant l : real_vector(0 to 2) := (others => 10.0e-6);
+        constant l : real_vector(1 to 3) := (others => 10.0e-6);
 
         impure function deriv_lcr (states : real_vector) return real_vector is
 
             variable retval : real_vector(0 to 1) := (0.0, 0.0);
+
+            variable ul : real_vector(1 to 3) := (0.0 , 0.0 , 0.0);
+            constant r  : real := 0.01;
+            alias il    : real_vector(1 to 3) is state_vector(0 to 2);
+            alias uc    : real_vector(1 to 3) is state_vector(3 to 5);
+
+            variable un : real := 0.0;
+            constant div : real := 1.0/(l(1)*l(2) + l(1)*l(3) + l(2)*l(3));
+            constant a : real_vector(1 to 3) := (l(2)*l(3)/div, l(1)*l(3)/div, l(1)*l(2)/div);
+
             constant l      : real := 100.0e-6;
             constant c      : real := 100.0e-6;
 
-            variable ul : real_vector(0 to 2) := (0.0 , 0.0 , 0.0);
-            constant r  : real := 0.01;
-            alias il    : real_vector(0 to 2) is state_vector(0 to 2);
-            alias uc    : real_vector(0 to 2) is state_vector(3 to 5);
-
-            variable un : real := 0.0;
+            variable dil : real_vector(1 to 3);
+            variable duc : real_vector(1 to 3);
 
         begin
-            ul(0) := uin(0) - uc(0) - il(0) * r;
             ul(1) := uin(1) - uc(1) - il(1) * r;
             ul(2) := uin(2) - uc(2) - il(2) * r;
-            -- un := 
+            ul(3) := uin(3) - uc(3) - il(3) * r;
+            un := a(1)*ul(1) + a(2)*ul(2) + a(3)*ul(3);
+
+            dil(1) := (ul(1)-un)/l;
+            dil(2) := (ul(2)-un)/l;
+            dil(3) := (ul(3)-un)/l;
+
+            duc(1) := (il(1))/c;
+            duc(2) := (il(2))/c;
+            duc(3) := (il(3))/c;
 
             retval(0) := (u_in - states(0) * 0.1 - states(1)) * (1.0/l);
             retval(1) := (states(0) - i_load) * (1.0/c);
