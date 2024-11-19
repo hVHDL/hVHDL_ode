@@ -26,19 +26,20 @@ package ode_pkg is
         state    : inout real_vector;
         stepsize : real);
 ------------------------------------------
-    type am_array is array(1 to 4) of real_vector(0 to 1);
+    type am_state_array is array(natural range <>) of REAL_VECTOR;
+    subtype am_array is am_state_array(1 to 4)(0 to 1);
 
     procedure am2_generic
     generic(impure function deriv (input : real_vector) return real_vector is <>)
     (
-        variable adams_steps : inout am_array;
+        variable adams_steps : inout am_state_array;
         variable state       : inout real_vector;
         stepsize             : real);
 ------------------------------------------
     procedure am4_generic
     generic(impure function deriv (input : real_vector) return real_vector is <>)
     (
-        variable adams_steps : inout am_array;
+        variable adams_steps : inout am_state_array;
         variable state       : inout real_vector;
         stepsize             : real);
 ------------------------------------------
@@ -143,7 +144,7 @@ package body ode_pkg is
     procedure am2_generic
     generic(impure function deriv (input : real_vector) return real_vector is <>)
     (
-        variable adams_steps : inout am_array;
+        variable adams_steps : inout am_state_array;
         variable state       : inout real_vector;
         stepsize             : real
     ) is
@@ -158,7 +159,7 @@ package body ode_pkg is
     procedure am4_generic
     generic(impure function deriv (input : real_vector) return real_vector is <>)
     (
-        variable adams_steps : inout am_array;
+        variable adams_steps : inout am_state_array;
         variable state       : inout real_vector;
         stepsize             : real
     ) is

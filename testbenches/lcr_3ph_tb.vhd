@@ -43,22 +43,18 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable u_in : real := 10.0;
-        variable i_load : real := 0.0;
-
-        variable uin          : real_vector(1 to 3) := (0.0 , 0.0 , 0.0);
-        variable state_vector : real_vector(0 to 5) := (others => 0.0);
+        variable uin          : real_vector(1 to 3) := (1.0 , -0.5 , 0.5);
 
         constant l : real_vector(1 to 3) := (others => 10.0e-6);
 
         impure function deriv_lcr (states : real_vector) return real_vector is
 
-            variable retval : real_vector(0 to 1) := (0.0, 0.0);
+            variable retval : real_vector(0 to 5);
 
             variable ul : real_vector(1 to 3) := (0.0 , 0.0 , 0.0);
             constant r  : real := 0.01;
-            alias il    : real_vector(1 to 3) is state_vector(0 to 2);
-            alias uc    : real_vector(1 to 3) is state_vector(3 to 5);
+            alias il    : real_vector(1 to 3) is states(0 to 2);
+            alias uc    : real_vector(1 to 3) is states(3 to 5);
 
             variable un : real := 0.0;
             constant div : real := 1.0/(l(1)*l(2) + l(1)*l(3) + l(2)*l(3));
@@ -84,8 +80,7 @@ begin
             duc(2) := (il(2))/c;
             duc(3) := (il(3))/c;
 
-            retval(0) := (u_in - states(0) * 0.1 - states(1)) * (1.0/l);
-            retval(1) := (states(0) - i_load) * (1.0/c);
+            retval := (dil(1), dil(2), dil(3), duc(1), duc(2), duc(3));
 
             return retval;
         end function;
@@ -93,17 +88,17 @@ begin
         procedure rk1 is new generic_rk1 generic map(deriv_lcr);
         procedure rk2 is new generic_rk2 generic map(deriv_lcr);
 
-        variable k2 : am_array := (others => (others => 0.0));
+        variable k2 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
         procedure am2 is new am2_generic generic map(deriv_lcr);
 
-        variable k4 : am_array := (others => (others => 0.0));
+        variable k4 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
         procedure am4 is new am4_generic generic map(deriv_lcr);
 
-        variable lcr_rk1 : real_vector(0 to 1) := (0.0, 0.0);
-        variable lcr_rk2 : real_vector(0 to 1) := (0.0, 0.0);
+        variable lcr_rk1 : real_vector(0 to 5) := (others => 0.0);
+        variable lcr_rk2 : real_vector(0 to 5) := (others => 0.0);
 
-        variable lcr_am2     : real_vector(0 to 1) := (0.0, 0.0);
-        variable lcr_am4     : real_vector(0 to 1) := (0.0, 0.0);
+        variable lcr_am2     : real_vector(0 to 5) := (others => 0.0);
+        variable lcr_am4     : real_vector(0 to 5) := (others => 0.0);
 
         file file_handler : text open write_mode is "lcr_3ph_tb.dat";
     begin
@@ -128,16 +123,16 @@ begin
                 am2(k2,lcr_am2, timestep);
                 am4(k4,lcr_am4, timestep);
 
-                if realtime > 5.0e-3 then i_load := 2.0; end if;
+                -- if realtime > 5.0e-3 then i_load := 2.0; end if;
 
                 realtime <= realtime + timestep;
                 write_to(file_handler,(realtime,
-                        lcr_rk2(0) ,
-                        lcr_am2(0) ,
                         lcr_am4(0) ,
-                        lcr_rk2(1) ,
-                        lcr_am2(1) ,
-                        lcr_am4(1)
+                        lcr_am4(1) ,
+                        lcr_am4(2) ,
+                        lcr_am4(3) ,
+                        lcr_am4(4) ,
+                        lcr_am4(5)
                     ));
 
             end if;
