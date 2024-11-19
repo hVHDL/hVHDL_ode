@@ -60,32 +60,56 @@ begin
         procedure rk2 is new generic_rk2 generic map(deriv_lcr);
         procedure rk4 is new generic_rk4 generic map(deriv_lcr);
 
-        variable k : am_array := (others => (others => 0.0));
+        variable k2 : am_array := (others => (others => 0.0));
         procedure am2 is new am2_generic generic map(deriv_lcr);
+
+        variable k4 : am_array := (others => (others => 0.0));
         procedure am4 is new am4_generic generic map(deriv_lcr);
 
-        variable lcr     : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_rk1 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_rk2 : real_vector(0 to 1) := (0.0, 0.0);
+
+        variable lcr_am2     : real_vector(0 to 1) := (0.0, 0.0);
+        variable lcr_am4     : real_vector(0 to 1) := (0.0, 0.0);
 
         file file_handler : text open write_mode is "lcr_simulation_rk4_tb.dat";
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
             if simulation_counter = 0 then
-                init_simfile(file_handler, ("time", "T_u0","T_u1","T_u2", "B_i0","B_i1","B_i2"));
+                init_simfile(file_handler, ("time", 
+                "T_u0",
+                "T_u1",
+                "T_u2",
+                "T_u3",
+                "B_i0",
+                "B_i1",
+                "B_i2",
+                "B_i3"
+                ));
             end if;
 
             if simulation_counter > 0 then
 
                 rk1(lcr_rk1, timestep);
-                am2(k,lcr, timestep);
                 rk2(lcr_rk2, timestep);
+
+                am2(k2,lcr_am2, timestep);
+                am4(k4,lcr_am4, timestep);
 
                 if realtime > 5.0e-3 then i_load := 2.0; end if;
 
                 realtime <= realtime + timestep;
-                write_to(file_handler,(realtime, lcr_rk1(0),lcr(0), lcr_rk2(0), lcr_rk1(1),lcr(1), lcr_rk2(1)));
+                write_to(file_handler,(realtime,
+                        lcr_rk1(0) ,
+                        lcr_rk2(0) ,
+                        lcr_am2(0) ,
+                        lcr_am4(0) ,
+                        lcr_rk1(1) ,
+                        lcr_rk2(1) ,
+                        lcr_am2(1) ,
+                        lcr_am4(1)
+                    ));
 
             end if;
 
