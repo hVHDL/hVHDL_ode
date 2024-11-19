@@ -83,7 +83,7 @@ begin
                 "T_u2",
                 "B_i0",
                 "B_i1",
-                "B_i2",
+                "B_i2"
                 ));
             end if;
 
@@ -99,11 +99,9 @@ begin
 
                 realtime <= realtime + timestep;
                 write_to(file_handler,(realtime,
-                        lcr_rk1(0) ,
                         lcr_rk2(0) ,
                         lcr_am2(0) ,
                         lcr_am4(0) ,
-                        lcr_rk1(1) ,
                         lcr_rk2(1) ,
                         lcr_am2(1) ,
                         lcr_am4(1)
