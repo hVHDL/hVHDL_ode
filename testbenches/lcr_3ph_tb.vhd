@@ -43,9 +43,9 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable uin          : real_vector(1 to 3) := (1.0 , -0.5 , 0.5);
+        variable uin : real_vector(1 to 3) := (1.0 , -0.5 , 0.5);
 
-        constant l : real_vector(1 to 3) := (others => 10.0e-6);
+        constant l : real_vector(1 to 3) := (2 => 50.0e-6, others => 10.0e-6);
 
         impure function deriv_lcr (states : real_vector) return real_vector is
 
@@ -57,8 +57,9 @@ begin
             alias uc    : real_vector(1 to 3) is states(3 to 5);
 
             variable un : real := 0.0;
-            constant div : real := 1.0/(l(1)*l(2) + l(1)*l(3) + l(2)*l(3));
-            constant a : real_vector(1 to 3) := (l(2)*l(3)/div, l(1)*l(3)/div, l(1)*l(2)/div);
+
+            constant div : real                := 1.0/(l(1)*l(2) + l(1)*l(3) + l(2)*l(3));
+            constant a   : real_vector(1 to 3) := (l(2)*l(3)/div, l(1)*l(3)/div, l(1)*l(2)/div);
 
             constant l      : real := 100.0e-6;
             constant c      : real := 100.0e-6;
@@ -97,10 +98,11 @@ begin
         variable lcr_rk1 : real_vector(0 to 5) := (others => 0.0);
         variable lcr_rk2 : real_vector(0 to 5) := (others => 0.0);
 
-        variable lcr_am2     : real_vector(0 to 5) := (others => 0.0);
-        variable lcr_am4     : real_vector(0 to 5) := (others => 0.0);
+        variable lcr_am2 : real_vector(0 to 5) := (others => 0.0);
+        variable lcr_am4 : real_vector(0 to 5) := (others => 0.0);
 
         file file_handler : text open write_mode is "lcr_3ph_tb.dat";
+
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;

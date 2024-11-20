@@ -45,15 +45,17 @@ begin
 
         variable u_in : real := 10.0;
         variable i_load : real := 0.0;
+        constant l : real := 100.0e-6;
+        constant c : real := 100.0e-6;
 
         impure function deriv_lcr (states : real_vector) return real_vector is
             variable retval : real_vector(0 to 1) := (0.0, 0.0);
-            constant l : real := 100.0e-6;
-            constant c : real := 100.0e-6;
         begin
             retval(0) := (u_in - states(0) * 0.1 - states(1)) * (1.0/l);
             retval(1) := (states(0) - i_load) * (1.0/c);
+
             return retval;
+
         end function;
 
         procedure rk1 is new generic_rk1 generic map(deriv_lcr);
@@ -68,6 +70,7 @@ begin
 
         variable lcr_rk1 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_rk2 : real_vector(0 to 1) := (0.0, 0.0);
+        variable lcr_rk4 : real_vector(0 to 1) := (0.0, 0.0);
 
         variable lcr_am2     : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_am4     : real_vector(0 to 1) := (0.0, 0.0);
@@ -93,6 +96,7 @@ begin
 
                 rk1(lcr_rk1, timestep);
                 rk2(lcr_rk2, timestep);
+                rk4(lcr_rk4, timestep);
 
                 am2(k2,lcr_am2, timestep);
                 am4(k4,lcr_am4, timestep);
