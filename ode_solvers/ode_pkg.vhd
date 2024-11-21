@@ -20,6 +20,12 @@ package ode_pkg is
         state    : inout real_vector;
         stepsize : real);
 ------------------------------------------
+    procedure generic_rk3
+    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    (
+        state    : inout real_vector;
+        stepsize : real);
+------------------------------------------
     procedure generic_rk4
     generic(impure function deriv (input : real_vector) return real_vector is <>)
     (
@@ -120,6 +126,32 @@ package body ode_pkg is
         state := state + k(2)*stepsize;
 
     end generic_rk2;
+
+------------------------------------------
+    procedure generic_rk3
+    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    (
+        state    : inout real_vector;
+        stepsize : real
+    ) is
+        type state_array is array(1 to 4) of real_vector(state'range);
+        variable k : state_array;
+        variable y_n1 : real_vector(state'range);
+        variable z_n1 : real_vector(state'range);
+    begin
+        k(1) := deriv(state);
+        k(2) := deriv(state + k(1) * stepsize/ 2.0);
+        k(3) := deriv(state + k(2) * stepsize * 3.0/4.0);
+
+        y_n1 := state + (k(1)*2.0/9.0 + k(2)*1.0/3.0 + k(3)*4.0/9.0) * stepsize;
+
+        k(4) := deriv(y_n1);
+
+        z_n1 := state + (k(1)*7.0/24.0 + k(2)*1.0/4.0 + k(3)*1.0/3.0) * stepsize;
+
+        state := z_n1;
+
+    end generic_rk3;
 
 ------------------------------------------
     procedure generic_rk4

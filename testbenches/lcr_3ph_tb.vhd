@@ -88,6 +88,7 @@ begin
 
         procedure rk1 is new generic_rk1 generic map(deriv_lcr);
         procedure rk2 is new generic_rk2 generic map(deriv_lcr);
+        procedure rk3 is new generic_rk3 generic map(deriv_lcr);
 
         variable k2 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
         procedure am2 is new am2_generic generic map(deriv_lcr);
@@ -97,6 +98,7 @@ begin
 
         variable lcr_rk1 : real_vector(0 to 5) := (others => 0.0);
         variable lcr_rk2 : real_vector(0 to 5) := (others => 0.0);
+        variable lcr_rk3 : real_vector(0 to 5) := (others => 0.0);
 
         variable lcr_am2 : real_vector(0 to 5) := (others => 0.0);
         variable lcr_am4 : real_vector(0 to 5) := (others => 0.0);
@@ -121,6 +123,7 @@ begin
 
                 rk1(lcr_rk1, timestep);
                 rk2(lcr_rk2, timestep);
+                rk3(lcr_rk3, timestep);
 
                 am2(k2,lcr_am2, timestep);
                 am4(k4,lcr_am4, timestep);
@@ -129,12 +132,12 @@ begin
 
                 realtime <= realtime + timestep;
                 write_to(file_handler,(realtime,
-                        lcr_am4(0) ,
-                        lcr_am4(1) ,
-                        lcr_am4(2) ,
-                        lcr_am4(3) ,
-                        lcr_am4(4) ,
-                        lcr_am4(5)
+                        lcr_rk3(0) ,
+                        lcr_rk3(1) ,
+                        lcr_rk3(2) ,
+                        lcr_rk3(3) ,
+                        lcr_rk3(4) ,
+                        lcr_rk3(5)
                     ));
 
             end if;
