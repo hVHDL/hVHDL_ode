@@ -24,7 +24,6 @@ architecture vunit_simulation of lcr_3ph_tb is
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant timestep : real := 10.0e-6;
     constant stoptime : real := 10.0e-3;
 
 begin
@@ -43,6 +42,7 @@ begin
 
     stimulus : process(simulator_clock)
 
+        variable timestep : real := 10.0e-6;
         variable uin : real_vector(1 to 3) := (1.0 , -0.5 , 0.5);
 
         constant l : real_vector(1 to 3) := (2 => 50.0e-6, others => 10.0e-6);
@@ -104,6 +104,7 @@ begin
         variable lcr_am4 : real_vector(0 to 5) := (others => 0.0);
 
         file file_handler : text open write_mode is "lcr_3ph_tb.dat";
+        variable simtime : real := 0.0;
 
     begin
         if rising_edge(simulator_clock) then
@@ -121,9 +122,12 @@ begin
 
             if simulation_counter > 0 then
 
+                simtime := realtime;
+                rk3(lcr_rk3 , simtime , timestep);
+
                 rk1(lcr_rk1, timestep);
                 rk2(lcr_rk2, timestep);
-                rk3(lcr_rk3, timestep);
+
 
                 am2(k2,lcr_am2, timestep);
                 am4(k4,lcr_am4, timestep);
