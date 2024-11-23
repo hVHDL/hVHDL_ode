@@ -56,7 +56,7 @@ begin
             alias il    : real_vector(1 to 3) is states(0 to 2);
             alias uc    : real_vector(1 to 3) is states(3 to 5);
 
-            variable un : real := 0.0;
+            variable un  : real := 0.0;
 
             constant div : real                := 1.0/(l(1)*l(2) + l(1)*l(3) + l(2)*l(3));
             constant a   : real_vector(1 to 3) := (l(2)*l(3)/div, l(1)*l(3)/div, l(1)*l(2)/div);
@@ -116,7 +116,8 @@ begin
                 "T_u2",
                 "B_i0",
                 "B_i1",
-                "B_i2"
+                "B_i2",
+                "B_st"
                 ));
             end if;
 
@@ -127,7 +128,6 @@ begin
 
                 rk1(lcr_rk1, timestep);
                 rk2(lcr_rk2, timestep);
-
 
                 am2(k2,lcr_am2, timestep);
                 am4(k4,lcr_am4, timestep);
@@ -141,7 +141,8 @@ begin
                         lcr_rk3(2) ,
                         lcr_rk3(3) ,
                         lcr_rk3(4) ,
-                        lcr_rk3(5)
+                        lcr_rk3(5) ,
+                        timestep
                     ));
 
             end if;
