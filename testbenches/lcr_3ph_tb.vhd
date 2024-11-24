@@ -89,7 +89,7 @@ begin
 
         procedure rk1 is new generic_rk1 generic map(deriv_lcr);
         procedure rk2 is new generic_rk2 generic map(deriv_lcr);
-        procedure rk3 is new generic_rk3 generic map(deriv_lcr);
+        procedure rk23 is new generic_adaptive_rk23 generic map(deriv_lcr);
 
         variable k2 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
         procedure am2 is new am2_generic generic map(deriv_lcr);
@@ -107,7 +107,8 @@ begin
         file file_handler : text open write_mode is "lcr_3ph_tb.dat";
         variable simtime : real := 0.0;
 
-        variable err       : real ;
+        variable err  : real ;
+        variable z_n1 : real_vector(lcr_am4'range);
 
     begin
         if rising_edge(simulator_clock) then
@@ -124,10 +125,12 @@ begin
                 ));
             end if;
 
+            z_n1 := deriv_lcr(lcr_rk3);
+
             if simulation_counter > 0 then
 
                 simtime := realtime;
-                rk3(lcr_rk3 , simtime, err , timestep);
+                rk23(lcr_rk3, z_n1 , simtime, err , timestep);
 
                 rk1(lcr_rk1, timestep);
                 rk2(lcr_rk2, timestep);

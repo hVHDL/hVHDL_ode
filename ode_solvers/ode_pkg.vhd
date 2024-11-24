@@ -24,10 +24,11 @@ package ode_pkg is
         previous_step : real;
     end record;
 ------------------------------------------
-    procedure generic_rk3
+    procedure generic_adaptive_rk23
     generic(impure function deriv (input : real_vector) return real_vector is <>)
     (
         state    : inout real_vector;
+        z_n1     : inout real_vector;
         simtime  : inout real;
         err      : inout real;
         stepsize : inout real);
@@ -134,10 +135,11 @@ package body ode_pkg is
     end generic_rk2;
 
 ------------------------------------------
-    procedure generic_rk3
+    procedure generic_adaptive_rk23
     generic(impure function deriv (input : real_vector) return real_vector is <>)
     (
         state    : inout real_vector;
+        z_n1     : inout real_vector;
         simtime  : inout real;
         err      : inout real;
         stepsize : inout real
@@ -145,14 +147,13 @@ package body ode_pkg is
         type state_array is array(1 to 4) of real_vector(state'range);
         variable k : state_array;
         variable y_n1 : real_vector(state'range);
-        variable z_n1 : real_vector(state'range);
 
         variable tolerance : real := 3.0e-3;
         variable h         : real := stepsize;
         variable h_new     : real ;
 
     begin
-        k(1) := deriv(state);
+        k(1) := z_n1;
         k(2) := deriv(state + k(1) * stepsize * 1.0/2.0);
         k(3) := deriv(state + k(2) * stepsize * 3.0/4.0);
 
@@ -160,7 +161,7 @@ package body ode_pkg is
 
         k(4) := deriv(y_n1);
 
-        z_n1 := state + (k(1)*7.0/24.0 + k(2)*1.0/4.0 + k(3)*1.0/3.0) * stepsize;
+        z_n1 := state + (k(1)*7.0/24.0 + k(2)*1.0/4.0 + k(3)*1.0/3.0 + k(4) * 1.0/8.0) * stepsize;
 
         err := abs((z_n1(0) - y_n1(0)));
 
@@ -180,7 +181,7 @@ package body ode_pkg is
         end if;
         stepsize := h_new;
 
-    end generic_rk3;
+    end generic_adaptive_rk23;
 
 ------------------------------------------
     procedure generic_rk4
