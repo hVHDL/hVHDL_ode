@@ -46,13 +46,14 @@ begin
         variable uin : real_vector(1 to 3) := (1.0 , -0.5 , 0.5);
 
         constant l : real_vector(1 to 3) := (2 => 50.0e-6, others => 10.0e-6);
+        variable i_load : real_vector(0 to 1) := (others => 0.0);
 
         impure function deriv_lcr (states : real_vector) return real_vector is
 
             variable retval : real_vector(0 to 5);
 
             variable ul : real_vector(1 to 3) := (0.0 , 0.0 , 0.0);
-            constant r  : real := 0.01;
+            constant r  : real := 0.11;
             alias il    : real_vector(1 to 3) is states(0 to 2);
             alias uc    : real_vector(1 to 3) is states(3 to 5);
 
@@ -77,9 +78,9 @@ begin
             dil(2) := (ul(2)-un)/l;
             dil(3) := (ul(3)-un)/l;
 
-            duc(1) := (il(1))/c;
-            duc(2) := (il(2))/c;
-            duc(3) := (il(3))/c;
+            duc(1) := (il(1) - i_load(0))/c;
+            duc(2) := (il(2) - i_load(1))/c;
+            duc(3) := (il(3) - (i_load(1) - i_load(0)))/c;
 
             retval := (dil(1), dil(2), dil(3), duc(1), duc(2), duc(3));
 
@@ -106,6 +107,8 @@ begin
         file file_handler : text open write_mode is "lcr_3ph_tb.dat";
         variable simtime : real := 0.0;
 
+        variable err       : real ;
+
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
@@ -124,7 +127,7 @@ begin
             if simulation_counter > 0 then
 
                 simtime := realtime;
-                rk3(lcr_rk3 , simtime , timestep);
+                rk3(lcr_rk3 , simtime, err , timestep);
 
                 rk1(lcr_rk1, timestep);
                 rk2(lcr_rk2, timestep);
@@ -132,7 +135,7 @@ begin
                 am2(k2,lcr_am2, timestep);
                 am4(k4,lcr_am4, timestep);
 
-                -- if realtime > 5.0e-3 then i_load := 2.0; end if;
+                if realtime > 5.0e-3 then i_load := (2.0, -1.0); end if;
 
                 realtime <= realtime + timestep;
                 write_to(file_handler,(realtime,

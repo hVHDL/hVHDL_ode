@@ -29,6 +29,7 @@ package ode_pkg is
     (
         state    : inout real_vector;
         simtime  : inout real;
+        err      : inout real;
         stepsize : inout real);
 ------------------------------------------
     procedure generic_rk4
@@ -138,6 +139,7 @@ package body ode_pkg is
     (
         state    : inout real_vector;
         simtime  : inout real;
+        err      : inout real;
         stepsize : inout real
     ) is
         type state_array is array(1 to 4) of real_vector(state'range);
@@ -145,8 +147,7 @@ package body ode_pkg is
         variable y_n1 : real_vector(state'range);
         variable z_n1 : real_vector(state'range);
 
-        variable tolerance : real := 1.0e-6;
-        variable err       : real ;
+        variable tolerance : real := 3.0e-3;
         variable h         : real := stepsize;
         variable h_new     : real ;
 
@@ -161,7 +162,7 @@ package body ode_pkg is
 
         z_n1 := state + (k(1)*7.0/24.0 + k(2)*1.0/4.0 + k(3)*1.0/3.0) * stepsize;
 
-        err := abs((z_n1(0) - y_n1(0))/z_n1(0));
+        err := abs((z_n1(0) - y_n1(0)));
 
         state := y_n1;
 
@@ -173,6 +174,9 @@ package body ode_pkg is
         h_new := h*cbrt(tolerance/err);
         if h_new < 100.0e-9 then
             h_new := 100.0e-9;
+        end if;
+        if h_new > 100.0e-6 then
+            h_new := 100.0e-6;
         end if;
         stepsize := h_new;
 
