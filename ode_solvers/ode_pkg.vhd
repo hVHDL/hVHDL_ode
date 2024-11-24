@@ -148,7 +148,7 @@ package body ode_pkg is
         variable k : state_array;
         variable y_n1 : real_vector(state'range);
 
-        variable tolerance : real := 3.0e-3;
+        variable tolerance : real := 1.0e-4;
         variable h         : real := stepsize;
         variable h_new     : real ;
 
