@@ -8,6 +8,7 @@ library vunit_lib;
 context vunit_lib.vunit_context;
 
     use work.write_pkg.all;
+    use work.adaptive_ode_pkg.all;
     use work.ode_pkg.all;
 
 entity lcr_3ph_tb is
