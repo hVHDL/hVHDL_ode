@@ -222,6 +222,8 @@ package body ode_pkg is
         constant dop6 : real_vector := (9017.0/3168.0  , -355.0/33.0     , 46732.0/5247.0 , 49.0/176.0     , -5103.0/18656.0);
         constant dop7 : real_vector := (35.0/384.0     , 0.0             , 500.0/1113.0   , 125.0/192.0    , -2187.0/6784.0    , 11.0/84.0);
 
+        constant dop8 : real_vector := (5179.0/57600.0 , 0.0             , 7571.0/16695.0 , 393.0/640.0    , -92097.0/339200.0 , 187.0/2100.0 , 1.0/40.0);
+
     begin
         k(1) := z_n1;
         k(2) := deriv(state +
@@ -261,11 +263,29 @@ package body ode_pkg is
             + k(6) * dop7(5)
             ) * stepsize);
 
+        z_n1 := deriv(state +
+            ( k(1) * dop8(0)
+            + k(2) * dop8(1)
+            + k(3) * dop8(2)
+            + k(4) * dop8(3)
+            + k(5) * dop8(4)
+            + k(6) * dop8(5)
+            + k(7) * dop8(6)
+            ) * stepsize);
 
-        -- y_n1  := state + 
-        state := state + k(7) * stepsize;
 
-        -- vErr := k(7) - 
+        y_n1  := state + k(7) * stepsize;
+        state := y_n1;
+
+        vErr := 
+            ( k(1) * (dop8(0) - dop7(0))
+            + k(2) * (dop8(1) - dop7(1))
+            + k(3) * (dop8(2) - dop7(2))
+            + k(4) * (dop8(3) - dop7(3))
+            + k(5) * (dop8(4) - dop7(4))
+            + k(6) * (dop8(5) - dop7(5))
+            + k(7) *  dop8(6)
+            ) * stepsize;
 
         err := abs(vErr(0)); -- use max value
 
