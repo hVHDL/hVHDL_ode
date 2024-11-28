@@ -7,7 +7,10 @@ package adaptive_ode_pkg is
 
 ------------------------------------------
     procedure generic_adaptive_rk23
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(
+        impure function deriv (input : real_vector) return real_vector is <>;
+        minstep : real := 100.0e-9;
+        maxstep : real := 100.0e-4)
     (
         state    : inout real_vector;
         z_n1     : inout real_vector;
@@ -32,8 +35,23 @@ package body adaptive_ode_pkg is
 
     use work.real_vector_pkg.all;
 ------------------------------------------
+    function norm(input : real_vector) return real is
+        variable retval : real := 0.0;
+    begin
+        for i in input'range loop
+            retval := retval + input(i)**2.0;
+        end loop;
+
+        return sqrt(retval);
+    end norm;
+
+------------------------------------------
     procedure generic_adaptive_rk23
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(
+        impure function deriv (input : real_vector) return real_vector is <>;
+        minstep : real := 100.0e-9;
+        maxstep : real := 100.0e-4
+    )
     (
         state    : inout real_vector;
         z_n1     : inout real_vector;
@@ -64,18 +82,19 @@ package body adaptive_ode_pkg is
 
         vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * stepsize;
 
-        err := abs(vErr(0)); -- use max value
+        err := norm(vErr); -- use max value
 
-        -- if err < tolerance then
-        -- end if;
-
-        -- cubic root
-        h_new := h*cbrt(tolerance/err);
-        if h_new < 100.0e-9 then
-            h_new := 100.0e-9;
-        end if;
-        if h_new > 100.0e-6 then
-            h_new := 100.0e-6;
+        if abs(err) > 1.0e-15 then
+            -- cubic root
+            h_new := h*cbrt(tolerance/err);
+            if h_new < minstep then
+                h_new := minstep;
+            end if;
+            if h_new > maxstep then
+                h_new := maxstep;
+            end if;
+        else
+            h_new := maxstep;
         end if;
 
         simtime  := simtime + stepsize;
@@ -85,7 +104,9 @@ package body adaptive_ode_pkg is
 
 ------------------------------------------
     procedure generic_adaptive_dop54
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(
+        impure function deriv (input : real_vector) return real_vector is <>
+    )
     (
         state    : inout real_vector;
         z_n1     : inout real_vector;
@@ -100,7 +121,7 @@ package body adaptive_ode_pkg is
         variable tolerance : real := 1.0e-3;
         variable h         : real := stepsize;
         variable h_new     : real ;
-        variable vErr       : real_vector(state'range);
+        variable vErr      : real_vector(state'range);
 
         constant dop2 : real_vector := (0 => 1.0/5.0);
         constant dop3 : real_vector := (3.0/40.0       , 9.0/40.0);
@@ -113,13 +134,16 @@ package body adaptive_ode_pkg is
 
     begin
         k(1) := z_n1;
+
         k(2) := deriv(state +
             ( k(1) * dop2(0) 
             ) * stepsize);
+
         k(3) := deriv(state +
             ( k(1) * dop3(0)
             + k(2) * dop3(1)
             ) * stepsize);
+
         k(4) := deriv(state +
             ( k(1) * dop4(0)
             + k(2) * dop4(1)
@@ -159,7 +183,6 @@ package body adaptive_ode_pkg is
             + k(6) * dop8(5)
             + k(7) * dop8(6)
             ) * stepsize);
-
 
         y_n1  := state + k(7) * stepsize;
         state := y_n1;

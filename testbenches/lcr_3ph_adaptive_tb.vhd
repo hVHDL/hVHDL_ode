@@ -11,11 +11,11 @@ context vunit_lib.vunit_context;
     use work.adaptive_ode_pkg.all;
     use work.ode_pkg.all;
 
-entity lcr_3ph_tb is
+entity lcr_3ph_adaptive_tb is
   generic (runner_cfg : string);
 end;
 
-architecture vunit_simulation of lcr_3ph_tb is
+architecture vunit_simulation of lcr_3ph_adaptive_tb is
 
     constant clock_period      : time    := 1 ns;
     
@@ -86,30 +86,18 @@ begin
             retval := (dil(1), dil(2), dil(3), duc(1), duc(2), duc(3));
 
             return retval;
+
         end function;
 
-        procedure rk1 is new generic_rk1 generic map(deriv_lcr);
-        procedure rk2 is new generic_rk2 generic map(deriv_lcr);
         procedure rk23 is new generic_adaptive_rk23 generic map(deriv_lcr);
 
-        variable k2 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
-        procedure am2 is new am2_generic generic map(deriv_lcr);
-
-        variable k4 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
-        procedure am4 is new am4_generic generic map(deriv_lcr);
-
-        variable lcr_rk1 : real_vector(0 to 5) := (others => 0.0);
         variable lcr_rk2 : real_vector(0 to 5) := (others => 0.0);
-        variable lcr_rk3 : real_vector(0 to 5) := (others => 0.0);
 
-        variable lcr_am2 : real_vector(0 to 5) := (others => 0.0);
-        variable lcr_am4 : real_vector(0 to 5) := (others => 0.0);
-
-        file file_handler : text open write_mode is "lcr_3ph_tb.dat";
+        file file_handler : text open write_mode is "lcr_3ph_adaptive_tb.dat";
         variable simtime : real := 0.0;
 
         variable err  : real ;
-        variable z_n1 : real_vector(lcr_am4'range);
+        variable z_n1 : real_vector(lcr_rk2'range);
 
     begin
         if rising_edge(simulator_clock) then
@@ -126,30 +114,24 @@ begin
                 ));
             end if;
 
-            z_n1 := deriv_lcr(lcr_rk3);
+            z_n1 := deriv_lcr(lcr_rk2);
 
             if simulation_counter > 0 then
 
                 simtime := realtime;
-                rk23(lcr_rk3, z_n1 , simtime, err , timestep);
-
-                -- rk1(lcr_rk1, timestep);
-                -- rk2(lcr_rk2, timestep);
-
-                -- am2(k2,lcr_am2, timestep);
-                -- am4(k4,lcr_am4, timestep);
+                rk23(lcr_rk2, z_n1 , simtime, err , timestep);
 
                 if realtime > 5.0e-3 then i_load := (2.0, -1.0); end if;
                 if realtime > 5.0 then i_load := (-20.0, 10.0); end if;
 
                 realtime <= realtime + timestep;
                 write_to(file_handler,(realtime,
-                        lcr_rk3(0) ,
-                        lcr_rk3(1) ,
-                        lcr_rk3(2) ,
-                        lcr_rk3(3) ,
-                        lcr_rk3(4) ,
-                        lcr_rk3(5) ,
+                        lcr_rk2(0) ,
+                        lcr_rk2(1) ,
+                        lcr_rk2(2) ,
+                        lcr_rk2(3) ,
+                        lcr_rk2(4) ,
+                        lcr_rk2(5) ,
                         timestep
                     ));
 
