@@ -4,13 +4,15 @@ LIBRARY ieee  ;
     use ieee.math_real.all;
 
 package adaptive_ode_pkg is 
+    constant default_minstep : real := 100.0e-9;
+    constant default_maxstep : real := 100.0e-4;
 
 ------------------------------------------
     procedure generic_adaptive_rk23
     generic(
         impure function deriv (input : real_vector) return real_vector is <>;
-        minstep : real := 100.0e-9;
-        maxstep : real := 100.0e-4)
+        minstep : real := default_minstep;
+        maxstep : real := default_maxstep)
     (
         state    : inout real_vector;
         z_n1     : inout real_vector;
@@ -19,7 +21,7 @@ package adaptive_ode_pkg is
         stepsize : inout real);
 
 ------------------------------------------
-    procedure generic_adaptive_dop54
+    procedure generic_adaptive_dopri54
     generic(impure function deriv (input : real_vector) return real_vector is <>)
     (
         state    : inout real_vector;
@@ -49,8 +51,8 @@ package body adaptive_ode_pkg is
     procedure generic_adaptive_rk23
     generic(
         impure function deriv (input : real_vector) return real_vector is <>;
-        minstep : real := 100.0e-9;
-        maxstep : real := 100.0e-4
+        minstep : real := default_minstep;
+        maxstep : real := default_maxstep
     )
     (
         state    : inout real_vector;
@@ -103,7 +105,7 @@ package body adaptive_ode_pkg is
     end generic_adaptive_rk23;
 
 ------------------------------------------
-    procedure generic_adaptive_dop54
+    procedure generic_adaptive_dopri54
     generic(
         impure function deriv (input : real_vector) return real_vector is <>
     )
@@ -204,8 +206,8 @@ package body adaptive_ode_pkg is
 
         -- cubic root
         h_new := h*cbrt(tolerance/err);
-        if h_new < 100.0e-9 then
-            h_new := 100.0e-9;
+        if h_new < default_minstep then
+            h_new := default_minstep;
         end if;
         if h_new > 100.0e-6 then
             h_new := 100.0e-6;
@@ -214,7 +216,7 @@ package body adaptive_ode_pkg is
         simtime  := simtime + stepsize;
         stepsize := h_new;
 
-    end generic_adaptive_dop54;
+    end generic_adaptive_dopri54;
 
 
 end package body adaptive_ode_pkg;
