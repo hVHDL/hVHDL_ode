@@ -91,13 +91,13 @@ begin
 
         procedure rk23 is new generic_adaptive_rk23 generic map(deriv_lcr);
 
-        variable lcr_rk2 : real_vector(0 to 5) := (others => 0.0);
+        variable lcr_rk23 : real_vector(0 to 5) := (others => 0.0);
 
         file file_handler : text open write_mode is "lcr_3ph_adaptive_tb.dat";
         variable simtime : real := 0.0;
 
         variable err  : real ;
-        variable z_n1 : real_vector(lcr_rk2'range);
+        variable z_n1 : real_vector(lcr_rk23'range);
 
     begin
         if rising_edge(simulator_clock) then
@@ -114,24 +114,24 @@ begin
                 ));
             end if;
 
-            z_n1 := deriv_lcr(lcr_rk2);
+            z_n1 := deriv_lcr(lcr_rk23);
 
             if simulation_counter > 0 then
 
                 simtime := realtime;
-                rk23(lcr_rk2, z_n1 , simtime, err , timestep);
+                rk23(lcr_rk23, z_n1 , simtime, err , timestep);
 
                 if realtime > 5.0e-3 then i_load := (2.0, -1.0); end if;
                 if realtime > 5.0 then i_load := (-20.0, 10.0); end if;
 
                 realtime <= realtime + timestep;
                 write_to(file_handler,(realtime,
-                        lcr_rk2(0) ,
-                        lcr_rk2(1) ,
-                        lcr_rk2(2) ,
-                        lcr_rk2(3) ,
-                        lcr_rk2(4) ,
-                        lcr_rk2(5) ,
+                        lcr_rk23(0) ,
+                        lcr_rk23(1) ,
+                        lcr_rk23(2) ,
+                        lcr_rk23(3) ,
+                        lcr_rk23(4) ,
+                        lcr_rk23(5) ,
                         timestep
                     ));
 
