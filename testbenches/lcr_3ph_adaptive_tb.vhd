@@ -73,14 +73,14 @@ begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
             if simulation_counter = 0 then
-                init_simfile(file_handler, ("time", 
-                "T_u0",
-                "T_u1",
-                "T_u2",
-                "B_i0",
-                "B_i1",
-                "B_i2",
-                "B_st"
+                init_simfile(file_handler, ("time" 
+                ,"T_u0"
+                ,"T_u1"
+                ,"T_u2"
+                ,"B_i0"
+                ,"B_i1"
+                ,"B_i2"
+                ,"B_st"
                 ));
             end if;
 

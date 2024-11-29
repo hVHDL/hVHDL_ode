@@ -38,7 +38,6 @@ package body lcr_models_pkg is
         constant div : real                := 1.0/(l(1)*l(2) + l(1)*l(3) + l(2)*l(3));
         constant a   : real_vector(1 to 3) := (l(2)*l(3)/div, l(1)*l(3)/div, l(1)*l(2)/div);
 
-
         variable dil : real_vector(1 to 3);
         variable duc : real_vector(1 to 3);
 
