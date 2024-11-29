@@ -16,10 +16,10 @@ end;
 
 architecture vunit_simulation of lcr_simulation_rk4_tb is
 
-    constant clock_period      : time    := 1 ns;
+    constant clock_period : time := 1 ns;
     
-    signal simulator_clock     : std_logic := '0';
-    signal simulation_counter  : natural   := 0;
+    signal simulator_clock    : std_logic := '0';
+    signal simulation_counter : natural   := 0;
     -----------------------------------
     -- simulation specific signals ----
 
@@ -43,10 +43,10 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable u_in : real := 10.0;
+        variable u_in   : real := 10.0;
         variable i_load : real := 0.0;
-        constant l : real := 100.0e-6;
-        constant c : real := 100.0e-6;
+        constant l      : real := 100.0e-6;
+        constant c      : real := 100.0e-6;
 
         impure function deriv_lcr (states : real_vector) return real_vector is
             variable retval : real_vector(0 to 1) := (0.0, 0.0);
@@ -72,23 +72,23 @@ begin
         variable lcr_rk2 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_rk4 : real_vector(0 to 1) := (0.0, 0.0);
 
-        variable lcr_am2     : real_vector(0 to 1) := (0.0, 0.0);
-        variable lcr_am4     : real_vector(0 to 1) := (0.0, 0.0);
+        variable lcr_am2 : real_vector(0 to 1) := (0.0, 0.0);
+        variable lcr_am4 : real_vector(0 to 1) := (0.0, 0.0);
 
         file file_handler : text open write_mode is "lcr_simulation_rk4_tb.dat";
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
             if simulation_counter = 0 then
-                init_simfile(file_handler, ("time", 
-                "T_u0",
-                "T_u1",
-                "T_u2",
-                "T_u3",
-                "B_i0",
-                "B_i1",
-                "B_i2",
-                "B_i3"
+                init_simfile(file_handler, ("time"
+                ,"T_u0"
+                ,"T_u1"
+                ,"T_u2"
+                ,"T_u3"
+                ,"B_i0"
+                ,"B_i1"
+                ,"B_i2"
+                ,"B_i3"
                 ));
             end if;
 
@@ -104,15 +104,15 @@ begin
                 if realtime > 5.0e-3 then i_load := 2.0; end if;
 
                 realtime <= realtime + timestep;
-                write_to(file_handler,(realtime,
-                        lcr_rk1(0) ,
-                        lcr_rk2(0) ,
-                        lcr_am2(0) ,
-                        lcr_am4(0) ,
-                        lcr_rk1(1) ,
-                        lcr_rk2(1) ,
-                        lcr_am2(1) ,
-                        lcr_am4(1)
+                write_to(file_handler,(realtime
+                        ,lcr_rk1(0) 
+                        ,lcr_rk2(0) 
+                        ,lcr_am2(0) 
+                        ,lcr_am4(0) 
+                        ,lcr_rk1(1) 
+                        ,lcr_rk2(1) 
+                        ,lcr_am2(1) 
+                        ,lcr_am4(1)
                     ));
 
             end if;

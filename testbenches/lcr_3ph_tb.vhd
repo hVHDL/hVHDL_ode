@@ -24,7 +24,7 @@ architecture vunit_simulation of lcr_3ph_tb is
     -----------------------------------
     -- simulation specific signals ----
 
-    signal realtime : real := 0.0;
+    signal realtime   : real := 0.0;
     constant stoptime : real := 10.0e-3;
 
 begin

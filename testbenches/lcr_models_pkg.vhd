@@ -6,12 +6,12 @@ LIBRARY ieee  ;
 package lcr_models_pkg is
 
     function deriv_lcr (
-        states : real_vector
+        states   : real_vector
         ; i_load : real_vector
-        ; uin : real_vector
-        ; c : real_vector
-        ; l : real_vector 
-        ; r : real_vector) 
+        ; uin    : real_vector
+        ; c      : real_vector
+        ; l      : real_vector
+        ; r      : real_vector)
         return real_vector;
 
 end package;
@@ -19,12 +19,12 @@ end package;
 package body lcr_models_pkg is
 
     function deriv_lcr (
-        states : real_vector
+        states   : real_vector
         ; i_load : real_vector
-        ; uin : real_vector
-        ; c : real_vector
-        ; l : real_vector
-        ; r : real_vector) 
+        ; uin    : real_vector
+        ; c      : real_vector
+        ; l      : real_vector
+        ; r      : real_vector)
         return real_vector is
 
         variable retval : real_vector(0 to 5);
