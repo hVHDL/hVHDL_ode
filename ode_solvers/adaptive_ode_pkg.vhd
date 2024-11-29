@@ -6,13 +6,15 @@ LIBRARY ieee  ;
 package adaptive_ode_pkg is 
     constant default_minstep : real := 100.0e-9;
     constant default_maxstep : real := 100.0e-4;
+    constant default_tolerance : real := 1.0e-6;
 
 ------------------------------------------
     procedure generic_adaptive_rk23
     generic(
-        impure function deriv (input : real_vector) return real_vector is <>;
-        minstep : real := default_minstep;
-        maxstep : real := default_maxstep)
+        impure function deriv (input : real_vector) return real_vector is <>
+        ; tolerance : real := default_tolerance
+        ; minstep : real := default_minstep
+        ; maxstep : real := default_maxstep)
     (
         state    : inout real_vector;
         z_n1     : inout real_vector;
@@ -51,6 +53,7 @@ package body adaptive_ode_pkg is
     procedure generic_adaptive_rk23
     generic(
         impure function deriv (input : real_vector) return real_vector is <>;
+        tolerance : real := default_tolerance;
         minstep : real := default_minstep;
         maxstep : real := default_maxstep
     )
@@ -65,7 +68,6 @@ package body adaptive_ode_pkg is
         variable k : state_array;
         variable y_n1 : real_vector(state'range);
 
-        variable tolerance : real := 1.0e-6;
         variable h         : real := stepsize;
         variable h_new     : real ;
         variable vErr       : real_vector(state'range);

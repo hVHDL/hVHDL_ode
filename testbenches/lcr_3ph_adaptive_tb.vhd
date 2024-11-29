@@ -10,7 +10,8 @@ package lcr_models_pkg is
         ; i_load : real_vector
         ; uin : real_vector
         ; c : real_vector
-        ; l : real_vector) 
+        ; l : real_vector 
+        ; r : real_vector) 
         return real_vector;
 
 end package;
@@ -22,13 +23,13 @@ package body lcr_models_pkg is
         ; i_load : real_vector
         ; uin : real_vector
         ; c : real_vector
-        ; l : real_vector) 
+        ; l : real_vector
+        ; r : real_vector) 
         return real_vector is
 
         variable retval : real_vector(0 to 5);
 
         variable ul : real_vector(1 to 3) := (0.0 , 0.0 , 0.0);
-        constant r  : real := 0.11;
         alias il    : real_vector(1 to 3) is states(0 to 2);
         alias uc    : real_vector(1 to 3) is states(3 to 5);
 
@@ -42,9 +43,9 @@ package body lcr_models_pkg is
         variable duc : real_vector(1 to 3);
 
     begin
-        ul(1) := uin(1) - uc(1) - il(1) * r;
-        ul(2) := uin(2) - uc(2) - il(2) * r;
-        ul(3) := uin(3) - uc(3) - il(3) * r;
+        ul(1) := uin(1) - uc(1) - il(1) * r(1);
+        ul(2) := uin(2) - uc(2) - il(2) * r(2);
+        ul(3) := uin(3) - uc(3) - il(3) * r(3);
         un := a(1)*ul(1) + a(2)*ul(2) + a(3)*ul(3);
 
         dil(1) := (ul(1)-un)/l(1);
@@ -60,6 +61,7 @@ package body lcr_models_pkg is
         return retval;
 
     end deriv_lcr;
+
 end package body;
 -----------------
 LIBRARY ieee  ; 
@@ -113,16 +115,17 @@ begin
 
         variable i_load : real_vector(0 to 1) := (others => 0.0);
         variable uin : real_vector(1 to 3) := (1.0 , -0.5 , 0.5);
-        constant l : real_vector(1 to 3) := (2 => 50.0e-6, others => 10.0e-6);
+        constant l : real_vector(1 to 3) := (2 => 50.0e-3, others => 90.0e-3);
         constant c : real_vector(1 to 3) := (others => 100.0e-6);
+        constant r : real_vector(1 to 3) := (others => 10.0e-3);
 
         ------------
         impure function deriv(states : real_vector) return real_vector is
         begin
-            return deriv_lcr(states, i_load, uin, l, c);
+            return deriv_lcr(states, i_load, uin, l, c, r);
         end deriv;
 
-        procedure rk23 is new generic_adaptive_rk23 generic map(deriv);
+        procedure rk23 is new generic_adaptive_rk23 generic map(maxstep => 10.0e-3, deriv => deriv);
         ------------
 
         variable lcr_rk23 : real_vector(0 to 5) := (others => 0.0);
@@ -166,7 +169,7 @@ begin
                         lcr_rk23(3) ,
                         lcr_rk23(4) ,
                         lcr_rk23(5) ,
-                        timestep
+                        timestep * 100.0
                     ));
 
             end if;
