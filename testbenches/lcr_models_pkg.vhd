@@ -5,7 +5,7 @@ LIBRARY ieee  ;
 
 package lcr_models_pkg is
 
-    impure function deriv_lcr (
+    function deriv_lcr (
         states : real_vector
         ; i_load : real_vector
         ; uin : real_vector
@@ -18,7 +18,7 @@ end package;
 
 package body lcr_models_pkg is
 
-    impure function deriv_lcr (
+    function deriv_lcr (
         states : real_vector
         ; i_load : real_vector
         ; uin : real_vector

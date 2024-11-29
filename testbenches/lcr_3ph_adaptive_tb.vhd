@@ -46,12 +46,11 @@ begin
 
         variable timestep : real := 10.0e-6;
 
-
-        variable i_load : real_vector(0 to 1) := (others => 0.0);
-        variable uin : real_vector(1 to 3) := (1.0 , -0.5 , 0.5);
-        constant l : real_vector(1 to 3) := (2 => 50.0e-3, others => 90.0e-3);
-        constant c : real_vector(1 to 3) := (others => 100.0e-6);
-        constant r : real_vector(1 to 3) := (others => 10.0e-3);
+        variable i_load : real_vector (0 to 1) := (others => 0.0);
+        variable uin    : real_vector (1 to 3) := (1.0 , -0.5 , 0.5);
+        constant l      : real_vector (1 to 3) := (2 => 50.0e-3, others => 90.0e-3);
+        constant c      : real_vector (1 to 3) := (others => 100.0e-6);
+        constant r      : real_vector (1 to 3) := (others => 10.0e-3);
 
         ------------
         impure function deriv(states : real_vector) return real_vector is
