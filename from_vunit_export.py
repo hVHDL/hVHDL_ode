@@ -1,5 +1,7 @@
 """
 Create a vhdl_ls.toml file from a VUnit --export-json file
+this was taken originally from 
+https://github.com/VHDL-LS/rust_hdl/blob/master/example_project/from_vunit_export.py
 """
 
 import argparse
