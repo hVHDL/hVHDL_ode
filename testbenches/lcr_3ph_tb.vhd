@@ -107,14 +107,14 @@ begin
                 if realtime > 5.0e-3 then i_load := (2.0, -1.0); end if;
 
                 realtime <= realtime + timestep;
-                write_to(file_handler,(realtime,
-                        lcr_rk4(0) ,
-                        lcr_rk4(1) ,
-                        lcr_rk4(2) ,
-                        lcr_rk4(3) ,
-                        lcr_rk4(4) ,
-                        lcr_rk4(5) ,
-                        timestep
+                write_to(file_handler,(realtime
+                        ,lcr_rk4(0) 
+                        ,lcr_rk4(1)
+                        ,lcr_rk4(2)
+                        ,lcr_rk4(3)
+                        ,lcr_rk4(4)
+                        ,lcr_rk4(5) 
+                        ,timestep
                     ));
 
             end if;
