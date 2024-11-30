@@ -95,14 +95,14 @@ begin
                 if realtime > 5.0 then i_load := (-20.0, 10.0); end if;
 
                 realtime <= realtime + timestep;
-                write_to(file_handler,(realtime,
-                        lcr_rk23(0) ,
-                        lcr_rk23(1) ,
-                        lcr_rk23(2) ,
-                        lcr_rk23(3) ,
-                        lcr_rk23(4) ,
-                        lcr_rk23(5) ,
-                        timestep * 100.0
+                write_to(file_handler,(realtime
+                        ,lcr_rk23(0) 
+                        ,lcr_rk23(1) 
+                        ,lcr_rk23(2) 
+                        ,lcr_rk23(3) 
+                        ,lcr_rk23(4) 
+                        ,lcr_rk23(5) 
+                        ,timestep * 100.0
                     ));
 
             end if;
