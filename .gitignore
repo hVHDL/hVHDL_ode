@@ -19,3 +19,4 @@ __pycache__
 *.o
 *.cir
 *.utf8
+*.toml
