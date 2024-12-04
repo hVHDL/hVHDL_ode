@@ -72,12 +72,12 @@ begin
         variable k4 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
         procedure am4 is new am4_generic generic map(deriv);
 
-        variable lcr_rk1 : real_vector(0 to 5) := (others => 0.0);
-        variable lcr_rk2 : real_vector(0 to 5) := (others => 0.0);
-        variable lcr_rk4 : real_vector(0 to 5) := (others => 0.0);
+        variable lcr_rk1 : lcr_model_3ph_record := init_lcr_model;
+        variable lcr_rk2 : lcr_model_3ph_record := init_lcr_model;
+        variable lcr_rk4 : lcr_model_3ph_record := init_lcr_model;
 
-        variable lcr_am2 : real_vector(0 to 5) := (others => 0.0);
-        variable lcr_am4 : real_vector(0 to 5) := (others => 0.0);
+        variable lcr_am2 : lcr_model_3ph_record := init_lcr_model;
+        variable lcr_am4 : lcr_model_3ph_record := init_lcr_model;
 
         file file_handler : text open write_mode is "lcr_3ph_tb.dat";
 
@@ -100,24 +100,24 @@ begin
 
                 simtime := realtime;
                 write_to(file_handler,(realtime
-                        ,lcr_rk2(3) 
-                        ,lcr_rk2(4)
-                        ,lcr_rk2(5)
-                        ,lcr_rk2(0)
-                        ,lcr_rk2(1)
-                        ,lcr_rk2(2) 
+                        ,get_capacitor_voltage(lcr_rk4)(0)
+                        ,get_capacitor_voltage(lcr_rk4)(1)
+                        ,get_capacitor_voltage(lcr_rk4)(2)
+                        ,lcr_rk4.states(0)
+                        ,lcr_rk4.states(1)
+                        ,lcr_rk4.states(2) 
                         ,timestep
                     ));
                 uin := (sin(simtime*1000.0*math_pi*2.0)
                        ,sin((simtime*1000.0+1.0/3.0)*math_pi*2.0)
                        ,sin((simtime*1000.0 + 2.0/3.0)*math_pi*2.0));
 
-                rk1(lcr_rk1, timestep);
-                rk2(lcr_rk2, timestep);
-                rk4(lcr_rk4, timestep);
+                rk1(lcr_rk1.states, timestep);
+                rk2(lcr_rk2.states, timestep);
+                rk4(lcr_rk4.states, timestep);
 
-                am2(k2,lcr_am2, timestep);
-                am4(k4,lcr_am4, timestep);
+                am2(k2,lcr_am2.states, timestep);
+                am4(k4,lcr_am4.states, timestep);
 
                 realtime <= realtime + timestep;
 
