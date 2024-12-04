@@ -4,9 +4,9 @@ LIBRARY ieee  ;
     use ieee.math_real.all;
 
 package adaptive_ode_pkg is 
-    constant default_minstep : real := 100.0e-9;
+    constant default_minstep : real := 10.0e-9;
     constant default_maxstep : real := 100.0e-4;
-    constant default_tolerance : real := 1.0e-6;
+    constant default_tolerance : real := 1.0e-7;
 
 ------------------------------------------
     procedure generic_adaptive_rk23

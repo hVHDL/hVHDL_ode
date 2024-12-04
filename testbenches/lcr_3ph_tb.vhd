@@ -43,13 +43,18 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable timestep : real := 10.0e-6;
+        variable timestep : real := 1.0e-6;
+        variable simtime : real := 0.0;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
-        variable uin    : real_vector (1 to 3) := (1.0 , -0.5 , 0.5);
-        constant l      : real_vector (1 to 3) := (2 => 90.0e-3, others => 90.0e-3);
-        constant c      : real_vector (1 to 3) := (others => 100.0e-6);
-        constant r      : real_vector (1 to 3) := (others => 10.0e-3);
+        variable uin    : real_vector (1 to 3) := (
+                        sin(simtime*1000.0*math_pi*2.0)
+                        ,sin((simtime*1000.0+1.0/3.0)*math_pi*2.0)
+                        ,sin((simtime*1000.0 + 2.0/3.0)*math_pi*2.0));
+
+        constant l      : real_vector (1 to 3) := (1 => 80.0e-6, others => 80.0e-6);
+        constant c      : real_vector (1 to 3) := (others => 60.0e-6);
+        constant r      : real_vector (1 to 3) := (others => 100.0e-3);
 
         ------------
         impure function deriv(states : real_vector) return real_vector is
@@ -75,8 +80,6 @@ begin
         variable lcr_am4 : real_vector(0 to 5) := (others => 0.0);
 
         file file_handler : text open write_mode is "lcr_3ph_tb.dat";
-        variable simtime : real := 0.0;
-
 
     begin
         if rising_edge(simulator_clock) then
@@ -96,6 +99,18 @@ begin
             if simulation_counter > 0 then
 
                 simtime := realtime;
+                write_to(file_handler,(realtime
+                        ,lcr_rk2(3) 
+                        ,lcr_rk2(4)
+                        ,lcr_rk2(5)
+                        ,lcr_rk2(0)
+                        ,lcr_rk2(1)
+                        ,lcr_rk2(2) 
+                        ,timestep
+                    ));
+                uin := (sin(simtime*1000.0*math_pi*2.0)
+                       ,sin((simtime*1000.0+1.0/3.0)*math_pi*2.0)
+                       ,sin((simtime*1000.0 + 2.0/3.0)*math_pi*2.0));
 
                 rk1(lcr_rk1, timestep);
                 rk2(lcr_rk2, timestep);
@@ -104,18 +119,7 @@ begin
                 am2(k2,lcr_am2, timestep);
                 am4(k4,lcr_am4, timestep);
 
-                if realtime > 5.0e-3 then i_load := (2.0, -1.0); end if;
-
                 realtime <= realtime + timestep;
-                write_to(file_handler,(realtime
-                        ,lcr_rk4(0) 
-                        ,lcr_rk4(1)
-                        ,lcr_rk4(2)
-                        ,lcr_rk4(3)
-                        ,lcr_rk4(4)
-                        ,lcr_rk4(5) 
-                        ,timestep
-                    ));
 
             end if;
 

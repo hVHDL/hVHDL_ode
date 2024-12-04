@@ -1,5 +1,5 @@
 # hVHDL_ode
-numerical integrators and associated packages for dynamic simulation of control systems
+numerical integrators and associated packages for dynamic simulation of control and signal processing systems
 
 Currently implemented are simplest basic integrators Runge-Kutta 1, 2 and 4th order and Adams-Moulton 2nd or 4th order, but the adaptive timestep Dormand-Prince 4(5) and Bogacki-Shampine 2(3) are also being developed
 
