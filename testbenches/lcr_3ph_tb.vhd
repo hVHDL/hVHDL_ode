@@ -43,7 +43,7 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable timestep : real := 1.0e-6;
+        variable timestep : real := 15.0e-6;
         variable simtime : real := 0.0;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
@@ -53,7 +53,7 @@ begin
                         ,sin((simtime*1000.0 + 2.0/3.0)*math_pi*2.0));
 
         constant l      : real_vector (1 to 3) := (1 => 80.0e-6, others => 80.0e-6);
-        constant c      : real_vector (1 to 3) := (others => 60.0e-6);
+        constant c      : real_vector (1 to 3) := (1 => 200.0e-6, others => 60.0e-6);
         constant r      : real_vector (1 to 3) := (others => 100.0e-3);
 
         ------------
@@ -103,9 +103,9 @@ begin
                         ,get_capacitor_voltage(lcr_rk4)(0)
                         ,get_capacitor_voltage(lcr_rk4)(1)
                         ,get_capacitor_voltage(lcr_rk4)(2)
-                        ,lcr_rk4.states(0)
-                        ,lcr_rk4.states(1)
-                        ,lcr_rk4.states(2) 
+                        ,get_inductor_current(lcr_rk4)(0)
+                        ,get_inductor_current(lcr_rk4)(1)
+                        ,get_inductor_current(lcr_rk4)(2)
                         ,timestep
                     ));
                 uin := (sin(simtime*1000.0*math_pi*2.0)

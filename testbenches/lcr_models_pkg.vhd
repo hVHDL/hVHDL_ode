@@ -15,6 +15,8 @@ package lcr_models_pkg is
 
     function get_capacitor_voltage(lcr : lcr_model_3ph_record) 
         return real_vector;
+    function get_inductor_current(lcr : lcr_model_3ph_record) 
+        return real_vector;
 ------------------------------------------------------
     function deriv_lcr (
         states   : real_vector
@@ -59,6 +61,15 @@ package body lcr_models_pkg is
         retval := lcr.states(3 to 5) - lcr.un;
         return retval;
     end get_capacitor_voltage;
+------------------------------------------------------
+    function get_inductor_current(lcr : lcr_model_3ph_record) 
+        return real_vector
+    is
+        variable retval : real_vector(0 to 2);
+    begin
+        retval := lcr.states(0 to 2);
+        return retval;
+    end get_inductor_current;
 ------------------------------------------------------
     function get_neutral_voltage(ul : real_vector; l : real_vector) return real
     is
