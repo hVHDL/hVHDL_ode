@@ -43,7 +43,7 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable timestep : real := 15.0e-6;
+        variable timestep : real := 10.0e-6;
         variable simtime : real := 0.0;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
@@ -62,9 +62,21 @@ begin
             return deriv_lcr(states, i_load, uin, l, c, r);
         end deriv;
 
+        impure function derive(t : real; states : real_vector) return real_vector is
+            variable input_voltage : real_vector(1 to 3);
+        begin
+            input_voltage := (
+                        sin(t*1000.0*math_pi*2.0)
+                        ,sin((t*1000.0+1.0/3.0)*math_pi*2.0)
+                        ,sin((t*1000.0 + 2.0/3.0)*math_pi*2.0));
+
+            return deriv_lcr(states, i_load, input_voltage, l, c, r);
+        end derive;
+
+
         procedure rk1 is new generic_rk1 generic map(deriv);
-        procedure rk2 is new generic_rk2 generic map(deriv);
-        procedure rk4 is new generic_rk2 generic map(deriv);
+        procedure rk2 is new generic_rk2 generic map(derive);
+        procedure rk4 is new generic_rk4 generic map(derive);
 
         variable k2 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
         procedure am2 is new am2_generic generic map(deriv);
@@ -100,12 +112,12 @@ begin
 
                 simtime := realtime;
                 write_to(file_handler,(realtime
-                        ,get_capacitor_voltage(lcr_rk4)(0)
-                        ,get_capacitor_voltage(lcr_rk4)(1)
-                        ,get_capacitor_voltage(lcr_rk4)(2)
-                        ,get_inductor_current(lcr_rk4)(0)
-                        ,get_inductor_current(lcr_rk4)(1)
-                        ,get_inductor_current(lcr_rk4)(2)
+                        ,get_capacitor_voltage(lcr_rk2)(0)
+                        ,get_capacitor_voltage(lcr_rk2)(1)
+                        ,get_capacitor_voltage(lcr_rk2)(2)
+                        ,get_inductor_current(lcr_rk2)(0)
+                        ,get_inductor_current(lcr_rk2)(1)
+                        ,get_inductor_current(lcr_rk2)(2)
                         ,timestep
                     ));
                 uin := (sin(simtime*1000.0*math_pi*2.0)
@@ -113,8 +125,8 @@ begin
                        ,sin((simtime*1000.0 + 2.0/3.0)*math_pi*2.0));
 
                 rk1(lcr_rk1.states, timestep);
-                rk2(lcr_rk2.states, timestep);
-                rk4(lcr_rk4.states, timestep);
+                rk2(realtime, lcr_rk2.states, timestep);
+                rk4(realtime, lcr_rk4.states, timestep);
 
                 am2(k2,lcr_am2.states, timestep);
                 am4(k4,lcr_am4.states, timestep);

@@ -14,8 +14,9 @@ package ode_pkg is
     );
 ------------------------------------------
     procedure generic_rk2
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(impure function deriv (t : real; input : real_vector) return real_vector is <>)
     (
+        t : real;
         state    : inout real_vector;
         stepsize : real);
 ------------------------------------------
@@ -24,8 +25,9 @@ package ode_pkg is
     end record;
 ------------------------------------------
     procedure generic_rk4
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(impure function deriv (t : real; input : real_vector) return real_vector is <>)
     (
+        t : real;
         state    : inout real_vector;
         stepsize : real);
 ------------------------------------------
@@ -67,16 +69,17 @@ package body ode_pkg is
 
 ------------------------------------------
     procedure generic_rk2
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(impure function deriv (t : real; input : real_vector) return real_vector is <>)
     (
+        t : real;
         state    : inout real_vector;
         stepsize : real
     ) is
         type state_array is array(1 to 2) of real_vector(state'range);
         variable k : state_array;
     begin
-        k(1) := deriv(state);
-        k(2) := deriv(state + k(1) * stepsize/ 2.0);
+        k(1) := deriv(t, state);
+        k(2) := deriv(t, state + k(1) * stepsize/ 2.0);
 
         state := state + k(2)*stepsize;
 
@@ -84,18 +87,19 @@ package body ode_pkg is
 
 ------------------------------------------
     procedure generic_rk4
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(impure function deriv (t : real; input : real_vector) return real_vector is <>)
     (
+        t : real;
         state    : inout real_vector;
         stepsize : real
     ) is
         type state_array is array(1 to 4) of real_vector(state'range);
         variable k : state_array;
     begin
-        k(1) := deriv(state);
-        k(2) := deriv(state + k(1) * stepsize/ 2.0);
-        k(3) := deriv(state + k(2) * stepsize/ 2.0);
-        k(4) := deriv(state + k(3) * stepsize);
+        k(1) := deriv(t, state);
+        k(2) := deriv(t + stepsize/2.0 , state + k(1) * stepsize/ 2.0);
+        k(3) := deriv(t + stepsize/2.0 , state + k(2) * stepsize/ 2.0);
+        k(4) := deriv(t + stepsize     , state + k(3) * stepsize);
 
         state := state + (k(1) + k(2) * 2.0 + k(3) * 2.0 + k(4)) * stepsize/6.0;
 

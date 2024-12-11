@@ -1,5 +1,4 @@
 from PyQSPICE import clsQSPICE as pqs
-import pandas as pd
 import os
 import sys
 import ast  # For safely parsing string representation of a list
