@@ -36,15 +36,17 @@ package ode_pkg is
     subtype am_array is am_state_array(1 to 4)(0 to 1);
 
     procedure am2_generic
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(impure function deriv (t : real; input : real_vector) return real_vector is <>)
     (
+        t : real;
         variable adams_steps : inout am_state_array;
         variable state       : inout real_vector;
         stepsize             : real);
 ------------------------------------------
     procedure am4_generic
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(impure function deriv (t : real; input : real_vector) return real_vector is <>)
     (
+        t : real;
         variable adams_steps : inout am_state_array;
         variable state       : inout real_vector;
         stepsize             : real);
@@ -109,8 +111,9 @@ package body ode_pkg is
 ------------------------------------------
 ------------------------------------------
     procedure am2_generic
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(impure function deriv (t : real; input : real_vector) return real_vector is <>)
     (
+        t : real;
         variable adams_steps : inout am_state_array;
         variable state       : inout real_vector;
         stepsize             : real
@@ -118,14 +121,15 @@ package body ode_pkg is
         alias k is adams_steps;
     begin
         k(2) := k(1);
-        k(1) := deriv(state);
+        k(1) := deriv(t, state);
 
         state := state + (k(1)*3.0 - k(2)) * stepsize/2.0;
     end am2_generic;
 ------------------------------------------
     procedure am4_generic
-    generic(impure function deriv (input : real_vector) return real_vector is <>)
+    generic(impure function deriv (t : real; input : real_vector) return real_vector is <>)
     (
+        t : real;
         variable adams_steps : inout am_state_array;
         variable state       : inout real_vector;
         stepsize             : real
@@ -135,7 +139,7 @@ package body ode_pkg is
         k(4) := k(3);
         k(3) := k(2);
         k(2) := k(1);
-        k(1) := deriv(state);
+        k(1) := deriv(t, state);
 
         state := state + (k(1)*55.0 - k(2)*59.0 + k(3)*37.0 - k(4)*9.0) * stepsize/24.0;
     end am4_generic;
