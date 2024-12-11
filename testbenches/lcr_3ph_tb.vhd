@@ -43,7 +43,7 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable timestep : real := 10.0e-6;
+        variable timestep : real := 50.0e-6;
         variable simtime : real := 0.0;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
@@ -74,7 +74,7 @@ begin
         end derive;
 
 
-        procedure rk1 is new generic_rk1 generic map(deriv);
+        procedure rk1 is new generic_rk1 generic map(derive);
         procedure rk2 is new generic_rk2 generic map(derive);
         procedure rk4 is new generic_rk4 generic map(derive);
 
@@ -112,19 +112,19 @@ begin
 
                 simtime := realtime;
                 write_to(file_handler,(realtime
-                        ,get_capacitor_voltage(lcr_rk2)(0)
-                        ,get_capacitor_voltage(lcr_rk2)(1)
-                        ,get_capacitor_voltage(lcr_rk2)(2)
-                        ,get_inductor_current(lcr_rk2)(0)
-                        ,get_inductor_current(lcr_rk2)(1)
-                        ,get_inductor_current(lcr_rk2)(2)
+                        ,get_capacitor_voltage(lcr_rk4)(0)
+                        ,get_capacitor_voltage(lcr_rk4)(1)
+                        ,get_capacitor_voltage(lcr_rk4)(2)
+                        ,get_inductor_current(lcr_rk4)(0)
+                        ,get_inductor_current(lcr_rk4)(1)
+                        ,get_inductor_current(lcr_rk4)(2)
                         ,timestep
                     ));
                 uin := (sin(simtime*1000.0*math_pi*2.0)
                        ,sin((simtime*1000.0+1.0/3.0)*math_pi*2.0)
                        ,sin((simtime*1000.0 + 2.0/3.0)*math_pi*2.0));
 
-                rk1(lcr_rk1.states, timestep);
+                rk1(realtime, lcr_rk1.states, timestep);
                 rk2(realtime, lcr_rk2.states, timestep);
                 rk4(realtime, lcr_rk4.states, timestep);
 
