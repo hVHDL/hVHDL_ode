@@ -50,6 +50,32 @@ package body adaptive_ode_pkg is
     end norm;
 
 ------------------------------------------
+    procedure generic_stepper
+    generic(
+        minstep : real := default_minstep
+        ;maxstep : real := default_maxstep)
+    (
+        prev_stepsize : in real
+        ; vErr : in real_vector
+        ; h_new : inout real
+        ; err : inout real)
+    is
+    begin
+        err := norm(vErr); 
+
+        if abs(err) > 1.0e-15 then
+            h_new := prev_stepsize*cbrt(default_tolerance/err); -- cbrt() is cubic root
+            if h_new < minstep then
+                h_new := minstep;
+            end if;
+            if h_new > maxstep then
+                h_new := maxstep;
+            end if;
+        else
+            h_new := maxstep;
+        end if;
+    end generic_stepper;
+------------------------------------------
     procedure generic_adaptive_rk23
     generic(
         impure function deriv (input : real_vector) return real_vector is <>;
@@ -71,35 +97,28 @@ package body adaptive_ode_pkg is
         variable h         : real := stepsize;
         variable h_new     : real ;
         variable vErr       : real_vector(state'range);
+        procedure stepper is new generic_stepper;
+
+        procedure rk is
+        begin
+            k(1) := z_n1;
+            k(2) := deriv(state + k(1) * stepsize * 1.0/2.0);
+            k(3) := deriv(state + k(2) * stepsize * 3.0/4.0);
+
+            y_n1 := state + (k(1)*2.0/9.0 + k(2)*1.0/3.0 + k(3)*4.0/9.0) * stepsize;
+
+            k(4) := deriv(y_n1);
+
+            z_n1  := state + k(4) * stepsize;
+            state := y_n1;
+
+            vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * stepsize;
+        end rk;
 
     begin
-        k(1) := z_n1;
-        k(2) := deriv(state + k(1) * stepsize * 1.0/2.0);
-        k(3) := deriv(state + k(2) * stepsize * 3.0/4.0);
 
-        y_n1 := state + (k(1)*2.0/9.0 + k(2)*1.0/3.0 + k(3)*4.0/9.0) * stepsize;
-
-        k(4) := deriv(y_n1);
-
-        z_n1  := state + k(4) * stepsize;
-        state := y_n1;
-
-        vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * stepsize;
-
-        err := norm(vErr); -- use max value
-
-        if abs(err) > 1.0e-15 then
-            -- cubic root
-            h_new := h*cbrt(tolerance/err);
-            if h_new < minstep then
-                h_new := minstep;
-            end if;
-            if h_new > maxstep then
-                h_new := maxstep;
-            end if;
-        else
-            h_new := maxstep;
-        end if;
+        rk;
+        stepper(prev_stepsize => h, vErr => vErr, h_new => h_new, err => err);
 
         simtime  := simtime + stepsize;
         stepsize := h_new;
@@ -201,7 +220,7 @@ package body adaptive_ode_pkg is
             + k(7) *  dop8(6)
             ) * stepsize;
 
-        err := abs(vErr(0)); -- use max value
+        err := norm(vErr); -- use max value
 
         -- if err < tolerance then
         -- end if;

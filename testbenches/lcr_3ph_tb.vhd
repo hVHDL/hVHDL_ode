@@ -43,7 +43,7 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable timestep : real := 10.0e-6;
+        variable timestep : real := 7.0e-6;
         variable simtime : real := 0.0;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
@@ -102,19 +102,19 @@ begin
             if simulation_counter > 0 then
 
                 write_to(file_handler,(realtime
-                        ,get_capacitor_voltage(lcr_rk2)(0)
-                        ,get_capacitor_voltage(lcr_rk2)(1)
-                        ,get_capacitor_voltage(lcr_rk2)(2)
-                        ,get_inductor_current(lcr_rk2)(0)
-                        ,get_inductor_current(lcr_rk2)(1)
-                        ,get_inductor_current(lcr_rk2)(2)
-
-                        -- ,get_capacitor_voltage(lcr_am2)(0)
-                        -- ,get_capacitor_voltage(lcr_am2)(1)
-                        -- ,get_capacitor_voltage(lcr_am2)(2)
-                        -- ,get_inductor_current(lcr_am2)(0)
-                        -- ,get_inductor_current(lcr_am2)(1)
-                        -- ,get_inductor_current(lcr_am2)(2)
+                        -- ,get_capacitor_voltage(lcr_rk2)(0)
+                        -- ,get_capacitor_voltage(lcr_rk2)(1)
+                        -- ,get_capacitor_voltage(lcr_rk2)(2)
+                        -- ,get_inductor_current(lcr_rk2)(0)
+                        -- ,get_inductor_current(lcr_rk2)(1)
+                        -- ,get_inductor_current(lcr_rk2)(2)
+                        --
+                        ,get_capacitor_voltage(lcr_am2)(0)
+                        ,get_capacitor_voltage(lcr_am2)(1)
+                        ,get_capacitor_voltage(lcr_am2)(2)
+                        ,get_inductor_current(lcr_am2)(0)
+                        ,get_inductor_current(lcr_am2)(1)
+                        ,get_inductor_current(lcr_am2)(2)
 
                         ,timestep
                     ));
