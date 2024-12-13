@@ -12,9 +12,7 @@ package adaptive_ode_pkg is
     procedure generic_adaptive_rk23
     generic(
         impure function deriv (t : real; input : real_vector) return real_vector is <>
-        ; tolerance : real := default_tolerance
-        ; minstep : real := default_minstep
-        ; maxstep : real := default_maxstep)
+    )
     (
         t : real;
         state    : inout real_vector;
@@ -77,12 +75,31 @@ package body adaptive_ode_pkg is
         end if;
     end generic_stepper;
 ------------------------------------------
+    --------
+    procedure rk_generic
+    generic(
+        impure function deriv(t : real; input : real_vector) return real_vector is <>
+    )
+    (t : real; y_n1 : inout real_vector; state : real_vector; h: real; z : inout real_vector; vErr : inout real_vector; k : inout st_array) 
+    is
+    begin
+        k(1) := z;
+        k(2) := deriv(t + h/2.0, state + k(1) * h * 1.0/2.0);
+        k(3) := deriv(t + h*3.0/4.0, state + k(2) * h * 3.0/4.0);
+
+        y_n1 := state + (k(1)*2.0/9.0 + k(2)*1.0/3.0 + k(3)*4.0/9.0) * h;
+
+        k(4) := deriv(t + h, y_n1);
+
+        z := state + k(4) * h;
+
+        vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * h;
+    end rk_generic;
+    --------
+
     procedure generic_adaptive_rk23
     generic(
-        impure function deriv (t : real; input : real_vector) return real_vector is <>;
-        tolerance : real := default_tolerance;
-        minstep : real   := default_minstep;
-        maxstep : real   := default_maxstep
+        impure function deriv (t : real; input : real_vector) return real_vector is <>
     )
     (
         t : real;
@@ -91,27 +108,8 @@ package body adaptive_ode_pkg is
         err      : inout real;
         stepsize : inout real
     ) is
-        procedure rk
-        -- generic(
-        --     impure function deriv(t : real; input : real_vector) return real_vector is <>
-        -- )
-        (t : real; y_n1 : inout real_vector; state : real_vector; h: real; z : inout real_vector; vErr : inout real_vector; k : inout st_array) 
-        is
-        begin
-            k(1) := z;
-            k(2) := deriv(t + h/2.0, state + k(1) * h * 1.0/2.0);
-            k(3) := deriv(t + h*3.0/4.0, state + k(2) * h * 3.0/4.0);
 
-            y_n1 := state + (k(1)*2.0/9.0 + k(2)*1.0/3.0 + k(3)*4.0/9.0) * h;
-
-            k(4) := deriv(t + h, y_n1);
-
-            z := state + k(4) * h;
-
-            vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * h;
-        end rk;
-
-        -- procedure rk is new rk_generic generic map(deriv);
+        procedure rk is new rk_generic generic map(deriv);
         procedure stepper is new generic_stepper;
 
         subtype state_array is st_array(1 to 4)(state'range);
