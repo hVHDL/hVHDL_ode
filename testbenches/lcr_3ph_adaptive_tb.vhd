@@ -44,18 +44,24 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable timestep : real := 10.0e-9;
+        variable stepsize : real := 10.0e-3;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
         variable uin    : real_vector (1 to 3) := (0.0 , -0.0 , 0.0);
         constant l      : real_vector (1 to 3) := (2 => 80.0e-6, others => 80.0e-6);
-        constant c      : real_vector (1 to 3) := (others => 60.0e-6);
+        constant c      : real_vector (1 to 3) := (1 => 200.0e-6, others => 60.0e-6);
         constant r      : real_vector (1 to 3) := (others => 100.0e-3);
 
         ------------
-        impure function deriv(states : real_vector) return real_vector is
+        impure function deriv(t : real; states : real_vector) return real_vector is
+            variable input_voltage : real_vector(1 to 3);
         begin
-            return deriv_lcr(states, i_load, uin, l, c, r);
+            input_voltage := (
+                        sin(t*1000.0*math_pi*2.0)
+                        ,sin((t*1000.0+1.0/3.0)*math_pi*2.0)
+                        ,sin((t*1000.0 + 2.0/3.0)*math_pi*2.0));
+
+            return deriv_lcr(states, i_load, input_voltage, l, c, r);
         end deriv;
 
         procedure rk23 is new generic_adaptive_rk23 generic map(maxstep => 10.0e-3, deriv => deriv);
@@ -89,8 +95,7 @@ begin
                     , sin(simtime*1000.0*math_pi*2.0)
                     , sin((simtime*1000.0 + 1.0/3.0)*math_pi*2.0));
 
-            z_n1 := deriv(lcr_rk23);
-
+            z_n1 := deriv(simtime, lcr_rk23);
 
             if simulation_counter > 0 then
 
@@ -100,12 +105,12 @@ begin
                         , sin(simtime*1000.0*math_pi*2.0)
                         , sin((simtime*1000.0 + 1.0/3.0)*math_pi*2.0));
 
-                rk23(lcr_rk23, z_n1 , simtime, err , timestep);
+                rk23(simtime, lcr_rk23, z_n1 , err , stepsize);
 
                 -- if realtime > 5.0e-3 then i_load := (2.0, -1.0); end if;
                 -- if realtime > 5.0 then i_load := (-20.0, 10.0); end if;
 
-                realtime <= realtime + timestep;
+                realtime <= realtime + stepsize;
                 write_to(file_handler,(realtime
                         ,lcr_rk23(3) 
                         ,lcr_rk23(4) 
@@ -113,7 +118,7 @@ begin
                         ,lcr_rk23(0) 
                         ,lcr_rk23(1) 
                         ,lcr_rk23(2) 
-                        ,timestep * 100.0
+                        ,stepsize * 100.0
                     ));
 
             end if;

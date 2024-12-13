@@ -11,14 +11,14 @@ package adaptive_ode_pkg is
 ------------------------------------------
     procedure generic_adaptive_rk23
     generic(
-        impure function deriv (input : real_vector) return real_vector is <>
+        impure function deriv (t : real; input : real_vector) return real_vector is <>
         ; tolerance : real := default_tolerance
         ; minstep : real := default_minstep
         ; maxstep : real := default_maxstep)
     (
+        t : real;
         state    : inout real_vector;
         z_n1     : inout real_vector;
-        simtime  : inout real;
         err      : inout real;
         stepsize : inout real);
 
@@ -78,49 +78,62 @@ package body adaptive_ode_pkg is
 ------------------------------------------
     procedure generic_adaptive_rk23
     generic(
-        impure function deriv (input : real_vector) return real_vector is <>;
+        impure function deriv (t : real; input : real_vector) return real_vector is <>;
         tolerance : real := default_tolerance;
         minstep : real := default_minstep;
         maxstep : real := default_maxstep
     )
     (
+        t : real;
         state    : inout real_vector;
         z_n1     : inout real_vector;
-        simtime  : inout real;
         err      : inout real;
         stepsize : inout real
     ) is
-        type state_array is array(1 to 4) of real_vector(state'range);
+        type st_array is array(natural range <>) of real_vector(state'range);
+        subtype state_array is st_array(1 to 4);
+
+        procedure rk(y_n1 : inout real_vector; state : real_vector; h: real; z : inout real_vector; vErr : inout real_vector; k : inout state_array) is
+        begin
+            k(1) := z;
+            k(2) := deriv(t + h/2.0, state + k(1) * h * 1.0/2.0);
+            k(3) := deriv(t + h*3.0/4.0, state + k(2) * h * 3.0/4.0);
+
+            y_n1 := state + (k(1)*2.0/9.0 + k(2)*1.0/3.0 + k(3)*4.0/9.0) * h;
+
+            k(4) := deriv(t + h, y_n1);
+
+            z  := state + k(4) * h;
+
+            vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * h;
+        end rk;
         variable k : state_array;
         variable y_n1 : real_vector(state'range);
 
         variable h         : real := stepsize;
         variable h_new     : real ;
         variable vErr       : real_vector(state'range);
+        variable z : real_vector(z_n1'range) := z_n1;
         procedure stepper is new generic_stepper;
 
-        procedure rk is
-        begin
-            k(1) := z_n1;
-            k(2) := deriv(state + k(1) * stepsize * 1.0/2.0);
-            k(3) := deriv(state + k(2) * stepsize * 3.0/4.0);
 
-            y_n1 := state + (k(1)*2.0/9.0 + k(2)*1.0/3.0 + k(3)*4.0/9.0) * stepsize;
-
-            k(4) := deriv(y_n1);
-
-            z_n1  := state + k(4) * stepsize;
-            state := y_n1;
-
-            vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * stepsize;
-        end rk;
+        variable run : boolean := true;
+        variable loop_count : natural range 0 to 7 := 0;
 
     begin
 
-        rk;
-        stepper(prev_stepsize => h, vErr => vErr, h_new => h_new, err => err);
-
-        simtime  := simtime + stepsize;
+        while(run) loop
+            loop_count := loop_count + 1;
+            rk(y_n1 => y_n1, state => state, h => h, z => z, vErr => vErr, k => k);
+            stepper(prev_stepsize => h, vErr => vErr, h_new => h_new, err => err);
+            if err < 1.0e-6 or loop_count >= 7 then
+                run := false;
+            else
+                h := h/4.0;
+            end if;
+        end loop;
+        z_n1     := z;
+        state    := y_n1;
         stepsize := h_new;
 
     end generic_adaptive_rk23;
