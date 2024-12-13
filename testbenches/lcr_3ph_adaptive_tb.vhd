@@ -118,7 +118,7 @@ begin
                         ,lcr_rk23(0) 
                         ,lcr_rk23(1) 
                         ,lcr_rk23(2) 
-                        ,stepsize * 100.0
+                        ,stepsize
                     ));
 
             end if;

@@ -4,9 +4,9 @@ LIBRARY ieee  ;
     use ieee.math_real.all;
 
 package adaptive_ode_pkg is 
-    constant default_minstep : real := 10.0e-9;
-    constant default_maxstep : real := 100.0e-4;
-    constant default_tolerance : real := 1.0e-7;
+    constant default_minstep : real := 1.0e-9;
+    constant default_maxstep : real := 10.0e-3;
+    constant default_tolerance : real := 1.0e-5;
 
 ------------------------------------------
     procedure generic_adaptive_rk23
@@ -38,6 +38,7 @@ end package adaptive_ode_pkg;
 package body adaptive_ode_pkg is 
 
     use work.real_vector_pkg.all;
+    type st_array is array(natural range <>) of real_vector;
 ------------------------------------------
     function norm(input : real_vector) return real is
         variable retval : real := 0.0;
@@ -80,8 +81,8 @@ package body adaptive_ode_pkg is
     generic(
         impure function deriv (t : real; input : real_vector) return real_vector is <>;
         tolerance : real := default_tolerance;
-        minstep : real := default_minstep;
-        maxstep : real := default_maxstep
+        minstep : real   := default_minstep;
+        maxstep : real   := default_maxstep
     )
     (
         t : real;
@@ -90,10 +91,9 @@ package body adaptive_ode_pkg is
         err      : inout real;
         stepsize : inout real
     ) is
-        type st_array is array(natural range <>) of real_vector(state'range);
-        subtype state_array is st_array(1 to 4);
 
-        procedure rk(y_n1 : inout real_vector; state : real_vector; h: real; z : inout real_vector; vErr : inout real_vector; k : inout state_array) is
+        procedure rk(y_n1 : inout real_vector; state : real_vector; h: real; z : inout real_vector; vErr : inout real_vector; k : inout st_array) is
+
         begin
             k(1) := z;
             k(2) := deriv(t + h/2.0, state + k(1) * h * 1.0/2.0);
@@ -107,15 +107,16 @@ package body adaptive_ode_pkg is
 
             vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * h;
         end rk;
+
+        subtype state_array is st_array(1 to 4)(state'range);
         variable k : state_array;
         variable y_n1 : real_vector(state'range);
 
-        variable h         : real := stepsize;
-        variable h_new     : real ;
-        variable vErr       : real_vector(state'range);
-        variable z : real_vector(z_n1'range) := z_n1;
+        variable h     : real := stepsize;
+        variable h_new : real ;
+        variable vErr  : real_vector(state'range);
+        variable z     : real_vector(z_n1'range) := z_n1;
         procedure stepper is new generic_stepper;
-
 
         variable run : boolean := true;
         variable loop_count : natural range 0 to 7 := 0;
@@ -126,7 +127,7 @@ package body adaptive_ode_pkg is
             loop_count := loop_count + 1;
             rk(y_n1 => y_n1, state => state, h => h, z => z, vErr => vErr, k => k);
             stepper(prev_stepsize => h, vErr => vErr, h_new => h_new, err => err);
-            if err < 1.0e-6 or loop_count >= 7 then
+            if err < 1.0e-4 or loop_count >= 7 then
                 run := false;
             else
                 h := h/4.0;
