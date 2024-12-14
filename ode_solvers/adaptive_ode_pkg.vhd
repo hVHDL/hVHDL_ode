@@ -6,7 +6,7 @@ LIBRARY ieee  ;
 package adaptive_ode_pkg is 
     constant default_minstep : real := 1.0e-9;
     constant default_maxstep : real := 10.0e-3;
-    constant default_tolerance : real := 1.0e-7;
+    constant default_tolerance : real := 3.0e-5;
 
 ------------------------------------------
     procedure generic_adaptive_rk23
@@ -70,7 +70,7 @@ package body adaptive_ode_pkg is
         err := norm(vErr); 
 
         if abs(err) > 1.0e-15 then
-            h_new := prev_stepsize*error_norm(default_tolerance/err); -- cbrt() is cubic root
+            h_new := 0.9*prev_stepsize*error_norm(default_tolerance/err); -- cbrt() is cubic root
             if h_new < minstep then
                 h_new := minstep;
             end if;
@@ -116,7 +116,7 @@ package body adaptive_ode_pkg is
 
             k(4) := deriv(t + h, y_n1);
 
-            z := state + k(4) * h;
+            z := k(4);
 
             vErr := (
                 k(1)*(dop4(0) - dop5(0)) 
@@ -189,7 +189,8 @@ package body adaptive_ode_pkg is
 
             constant tdop : real_vector := (0.0 , 1.0/5.0 , 3.0/10.0 , 4.0/5.0 , 8.0/9.0 , 1.0 , 1.0);
         begin
-            k(1) := z;
+            -- k(1) := z;
+            k(1) := deriv(t, state);
 
             k(2) := deriv(t + h*tdop(1), state +
                 ( k(1) * dop2(0) 
@@ -233,17 +234,9 @@ package body adaptive_ode_pkg is
 
             k(7) := deriv(t + h, y_n1);
 
-            z := state +
-                ( k(1) * dop8(0)
-                + k(2) * dop8(1)
-                + k(3) * dop8(2)
-                + k(4) * dop8(3)
-                + k(5) * dop8(4)
-                + k(6) * dop8(5)
-                + k(7) * dop8(6)
-                ) * h;
+            z := k(7);
 
-
+            -- vErr := y_n1 - z;
             vErr := 
                 ( k(1) * (dop8(0) - dop7(0))
                 + k(2) * (dop8(1) - dop7(1))
@@ -277,21 +270,21 @@ package body adaptive_ode_pkg is
 
     begin
 
-        -- while(run) loop
-        --     loop_count := loop_count + 1;
+        while(run) loop
+            loop_count := loop_count + 1;
             rk(t => t, y_n1 => y_n1, state => state, h => h, z => z, vErr => vErr, k => k);
-            -- stepper(prev_stepsize => h, vErr => vErr, h_new => h_new, err => err);
-            -- if err < 1.0e-6 or loop_count >= 7 then
-            --     run := false;
-            -- else
-            --     h := h/4.0;
-            --     run := true;
-            -- end if;
-        -- end loop;
-        z_n1     := y_n1;
+            stepper(prev_stepsize => h, vErr => vErr, h_new => h_new, err => err);
+            if err < 1.0e-4 or loop_count >= 7 then
+                run := false;
+            else
+                h := h/4.0;
+                run := true;
+            end if;
+        end loop;
+        z_n1     := z;
         state    := y_n1;
-        -- stepsize := h_new;
-        stepsize := h;
+        stepsize := h_new;
+        -- stepsize := h;
 
     end generic_adaptive_dopri54;
 

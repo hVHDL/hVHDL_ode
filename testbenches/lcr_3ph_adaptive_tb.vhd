@@ -44,7 +44,7 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable stepsize : real := 10.0e-3;
+        variable stepsize : real := 100.0e-6;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
         variable uin    : real_vector (1 to 3) := (0.0 , -0.0 , 0.0);
@@ -90,27 +90,7 @@ begin
                 ));
             end if;
 
-            simtime := realtime;
-            uin := (sin((simtime*1000.0-1.0/3.0)*math_pi*2.0)
-                    , sin(simtime*1000.0*math_pi*2.0)
-                    , sin((simtime*1000.0 + 1.0/3.0)*math_pi*2.0));
-
-            z_n1 := deriv(simtime, lcr_rk23);
-
-            if simulation_counter > 0 then
-
-
-                simtime := realtime;
-                uin := (sin((simtime*1000.0-1.0/3.0)*math_pi*2.0)
-                        , sin(simtime*1000.0*math_pi*2.0)
-                        , sin((simtime*1000.0 + 1.0/3.0)*math_pi*2.0));
-
-                rk23(simtime, lcr_rk23, z_n1 , err , stepsize);
-
-                -- if realtime > 5.0e-3 then i_load := (2.0, -1.0); end if;
-                -- if realtime > 5.0 then i_load := (-20.0, 10.0); end if;
-
-                realtime <= realtime + stepsize;
+                z_n1 := deriv(simtime, lcr_rk23);
                 write_to(file_handler,(realtime
                         ,lcr_rk23(3) 
                         ,lcr_rk23(4) 
@@ -121,7 +101,13 @@ begin
                         ,stepsize
                     ));
 
-            end if;
+                simtime := realtime;
+                rk23(simtime, lcr_rk23, z_n1 , err , stepsize);
+
+                -- if realtime > 5.0e-3 then i_load := (2.0, -1.0); end if;
+                -- if realtime > 5.0 then i_load := (-20.0, 10.0); end if;
+
+                realtime <= realtime + stepsize;
 
         end if; -- rising_edge
     end process stimulus;	
