@@ -6,7 +6,7 @@ LIBRARY ieee  ;
 package adaptive_ode_pkg is 
     constant default_minstep : real := 1.0e-9;
     constant default_maxstep : real := 10.0e-3;
-    constant default_tolerance : real := 1.0e-5;
+    constant default_tolerance : real := 1.0e-7;
 
 ------------------------------------------
     procedure generic_adaptive_rk23
@@ -103,18 +103,27 @@ package body adaptive_ode_pkg is
         -- )
         (t : real; y_n1 : inout real_vector; state : real_vector; h: real; z : inout real_vector; vErr : inout real_vector; k : inout st_array) 
         is
+            constant dop2 : real_vector := (0 => 1.0/2.0);
+            constant dop3 : real_vector := (0.0       , 3.0/4.0);
+            constant dop4 : real_vector := (2.0/9.0      , 1.0/3.0      , 4.0/9.0);
+            constant dop5 : real_vector := (7.0/24.0, 1.0/4.0, 1.0/3.0, 1.0/8.0);
         begin
             k(1) := z;
-            k(2) := deriv(t + h/2.0, state + k(1) * h * 1.0/2.0);
-            k(3) := deriv(t + h*3.0/4.0, state + k(2) * h * 3.0/4.0);
+            k(2) := deriv(t + h/2.0, state + k(1) * h * dop2(0));
+            k(3) := deriv(t + h*3.0/4.0, state + k(2) * h * dop3(1));
 
-            y_n1 := state + (k(1)*2.0/9.0 + k(2)*1.0/3.0 + k(3)*4.0/9.0) * h;
+            y_n1 := state + (k(1)*dop4(0) + k(2)*dop4(1) + k(3)*dop4(2)) * h;
 
             k(4) := deriv(t + h, y_n1);
 
             z := state + k(4) * h;
 
-            vErr := (k(1)*(-5.0/72.0) + k(2)*1.0/12.0 + k(3)*1.0/9.0 - k(4)*1.0/8.0) * h;
+            vErr := (
+                k(1)*(dop4(0) - dop5(0)) 
+                +k(2)*(dop4(1) - dop5(1)) 
+                +k(3)*(dop4(2) - dop5(2)) 
+                +k(4)*( - dop5(3)) 
+            ) * h;
         end rk;
         --------
 
@@ -176,34 +185,35 @@ package body adaptive_ode_pkg is
             constant dop6 : real_vector := (9017.0/3168.0  , -355.0/33.0     , 46732.0/5247.0 , 49.0/176.0     , -5103.0/18656.0);
             constant dop7 : real_vector := (35.0/384.0     , 0.0             , 500.0/1113.0   , 125.0/192.0    , -2187.0/6784.0    , 11.0/84.0);
 
-            constant dop8 : real_vector := (5179.0/57600.0 , 0.0             , 7571.0/16695.0 , 393.0/640.0    , -92097.0/339200.0 , 187.0/2100.0 , 1.0/40.0);
+            constant dop8 : real_vector := (5179.0/57600.0 , 0.0     , 7571.0/16695.0 , 393.0/640.0 , -92097.0/339200.0 , 187.0/2100.0 , 1.0/40.0);
 
+            constant tdop : real_vector := (0.0 , 1.0/5.0 , 3.0/10.0 , 4.0/5.0 , 8.0/9.0 , 1.0 , 1.0);
         begin
             k(1) := z;
 
-            k(2) := deriv(t, state +
+            k(2) := deriv(t + h*tdop(1), state +
                 ( k(1) * dop2(0) 
                 ) * h);
 
-            k(3) := deriv(t, state +
+            k(3) := deriv(t + h*tdop(2), state +
                 ( k(1) * dop3(0)
                 + k(2) * dop3(1)
                 ) * h);
 
-            k(4) := deriv(t, state +
+            k(4) := deriv(t + h*tdop(3), state +
                 ( k(1) * dop4(0)
                 + k(2) * dop4(1)
                 + k(3) * dop4(2)
                 ) * h);
 
-            k(5) := deriv(t, state +
+            k(5) := deriv(t + h*tdop(4), state +
                 ( k(1) * dop5(0)
                 + k(2) * dop5(1)
                 + k(3) * dop5(2)
                 + k(4) * dop5(3)
                 ) * h);
 
-            k(6) := deriv(t, state +
+            k(6) := deriv(t + h*tdop(5), state +
                 ( k(1) * dop6(0)
                 + k(2) * dop6(1)
                 + k(3) * dop6(2)
@@ -211,7 +221,7 @@ package body adaptive_ode_pkg is
                 + k(5) * dop6(4)
                 ) * h);
 
-            k(7) := deriv(t, state +
+            k(7) := deriv(t + h*tdop(6), state +
                 ( k(1) * dop7(0)
                 + k(2) * dop7(1)
                 + k(3) * dop7(2)
@@ -231,6 +241,8 @@ package body adaptive_ode_pkg is
                 + k(6) * dop8(5)
                 + k(7) * dop8(6)
                 ) * h);
+
+            -- y_n1  := state + z * h;
 
             vErr := 
                 ( k(1) * (dop8(0) - dop7(0))
@@ -265,20 +277,21 @@ package body adaptive_ode_pkg is
 
     begin
 
-        while(run) loop
-            loop_count := loop_count + 1;
+        -- while(run) loop
+        --     loop_count := loop_count + 1;
             rk(t => t, y_n1 => y_n1, state => state, h => h, z => z, vErr => vErr, k => k);
-            stepper(prev_stepsize => h, vErr => vErr, h_new => h_new, err => err);
-            if err < 1.0e-4 or loop_count >= 7 then
-                run := false;
-            else
-                h := h/4.0;
-                run := true;
-            end if;
-        end loop;
+            -- stepper(prev_stepsize => h, vErr => vErr, h_new => h_new, err => err);
+            -- if err < 1.0e-6 or loop_count >= 7 then
+            --     run := false;
+            -- else
+            --     h := h/4.0;
+            --     run := true;
+            -- end if;
+        -- end loop;
         z_n1     := z;
         state    := y_n1;
-        stepsize := h_new;
+        -- stepsize := h_new;
+        stepsize := h;
 
     end generic_adaptive_dopri54;
 
