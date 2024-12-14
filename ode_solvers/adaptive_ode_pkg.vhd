@@ -25,7 +25,8 @@ package adaptive_ode_pkg is
 ------------------------------------------
     procedure generic_adaptive_dopri54
     generic(
-        impure function deriv (t : real; input : real_vector) return real_vector is <>)
+        impure function deriv (t : real; input : real_vector) return real_vector is <>
+    )
     (
         t        : in real;
         state    : inout real_vector;
@@ -54,7 +55,8 @@ package body adaptive_ode_pkg is
 ------------------------------------------
     procedure generic_stepper
     generic(
-        minstep : real := default_minstep
+        function error_norm(X : real) return real is <>
+        ;minstep : real := default_minstep
         ;maxstep : real := default_maxstep)
     (
         prev_stepsize : in real
@@ -66,7 +68,7 @@ package body adaptive_ode_pkg is
         err := norm(vErr); 
 
         if abs(err) > 1.0e-15 then
-            h_new := prev_stepsize*cbrt(default_tolerance/err); -- cbrt() is cubic root
+            h_new := prev_stepsize*error_norm(default_tolerance/err); -- cbrt() is cubic root
             if h_new < minstep then
                 h_new := minstep;
             end if;
@@ -115,7 +117,7 @@ package body adaptive_ode_pkg is
         --------
 
         -- procedure rk is new rk_generic generic map(deriv);
-        procedure stepper is new generic_stepper generic map (minstep => minstep, maxstep => maxstep);
+        procedure stepper is new generic_stepper generic map (cbrt, minstep => minstep, maxstep => maxstep);
 
         subtype state_array is st_array(1 to 4)(state'range);
         variable k : state_array;
@@ -163,7 +165,11 @@ package body adaptive_ode_pkg is
         variable k : state_array;
         variable y_n1 : real_vector(state'range);
 
-        procedure stepper is new generic_stepper;
+        function fifth_root(X : real) return real is
+        begin
+            return X**(1.0/5.0);
+        end fifth_root;
+        procedure stepper is new generic_stepper generic map(fifth_root);
 
         variable h     : real := stepsize;
         variable h_new : real ;
