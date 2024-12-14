@@ -230,9 +230,11 @@ package body adaptive_ode_pkg is
                 + k(6) * dop7(5)
                 ) * h);
 
-            y_n1  := state + k(7) * h;
+            z := state + k(7) * h;
+            y_n1  := z;
+            -- y_n1 := state + k(7) * h;
 
-            z := deriv(t, state +
+            y_n1 := state +
                 ( k(1) * dop8(0)
                 + k(2) * dop8(1)
                 + k(3) * dop8(2)
@@ -240,9 +242,8 @@ package body adaptive_ode_pkg is
                 + k(5) * dop8(4)
                 + k(6) * dop8(5)
                 + k(7) * dop8(6)
-                ) * h);
+                ) * h;
 
-            -- y_n1  := state + z * h;
 
             vErr := 
                 ( k(1) * (dop8(0) - dop7(0))
