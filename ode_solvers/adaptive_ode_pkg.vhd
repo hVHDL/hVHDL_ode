@@ -26,6 +26,8 @@ package adaptive_ode_pkg is
     procedure generic_adaptive_dopri54
     generic(
         impure function deriv (t : real; input : real_vector) return real_vector is <>
+        ;minstep : real := default_minstep
+        ;maxstep : real := default_maxstep
     )
     (
         t        : in real;
@@ -153,6 +155,8 @@ package body adaptive_ode_pkg is
     procedure generic_adaptive_dopri54
     generic(
         impure function deriv (t : real; input : real_vector) return real_vector is <>
+        ;minstep : real := default_minstep
+        ;maxstep : real := default_maxstep
     )
     (
         t        : in real;
@@ -161,60 +165,43 @@ package body adaptive_ode_pkg is
         err      : inout real        ;
         stepsize : inout real
     ) is
-        subtype state_array is st_array(1 to 7)(state'range);
-        variable k : state_array;
-        variable y_n1 : real_vector(state'range);
-
-        function fifth_root(X : real) return real is
-        begin
-            return X**(1.0/5.0);
-        end fifth_root;
-        procedure stepper is new generic_stepper generic map(fifth_root);
-
-        variable h     : real := stepsize;
-        variable h_new : real ;
-        variable vErr  : real_vector(state'range);
-        variable z     : real_vector(z_n1'range) := z_n1;
-
-        variable run : boolean := true;
-        variable loop_count : natural range 0 to 7 := 0;
-
-        constant dop2 : real_vector := (0 => 1.0/5.0);
-        constant dop3 : real_vector := (3.0/40.0       , 9.0/40.0);
-        constant dop4 : real_vector := (3.0/40.0       , 9.0/40.0        , 32.0/9.0);
-        constant dop5 : real_vector := (19372.0/6561.0 , -25360.0/2187.0 , 64448.0/6561.0 , -212.0/729.0);
-        constant dop6 : real_vector := (9017.0/3168.0  , -355.0/33.0     , 46732.0/5247.0 , 49.0/176.0     , -5103.0/18656.0);
-        constant dop7 : real_vector := (35.0/384.0     , 0.0             , 500.0/1113.0   , 125.0/192.0    , -2187.0/6784.0    , 11.0/84.0);
-
-        constant dop8 : real_vector := (5179.0/57600.0 , 0.0             , 7571.0/16695.0 , 393.0/640.0    , -92097.0/339200.0 , 187.0/2100.0 , 1.0/40.0);
 
         procedure rk
             (t : real; y_n1 : inout real_vector; state : real_vector; h: real; z : inout real_vector; vErr : inout real_vector; k : inout st_array) 
         is
+            constant dop2 : real_vector := (0 => 1.0/5.0);
+            constant dop3 : real_vector := (3.0/40.0       , 9.0/40.0);
+            constant dop4 : real_vector := (44.0/45.0      , -56.0/15.0      , 32.0/9.0);
+            constant dop5 : real_vector := (19372.0/6561.0 , -25360.0/2187.0 , 64448.0/6561.0 , -212.0/729.0);
+            constant dop6 : real_vector := (9017.0/3168.0  , -355.0/33.0     , 46732.0/5247.0 , 49.0/176.0     , -5103.0/18656.0);
+            constant dop7 : real_vector := (35.0/384.0     , 0.0             , 500.0/1113.0   , 125.0/192.0    , -2187.0/6784.0    , 11.0/84.0);
+
+            constant dop8 : real_vector := (5179.0/57600.0 , 0.0             , 7571.0/16695.0 , 393.0/640.0    , -92097.0/339200.0 , 187.0/2100.0 , 1.0/40.0);
+
         begin
-            k(1) := z_n1;
+            k(1) := z;
 
             k(2) := deriv(t, state +
                 ( k(1) * dop2(0) 
-                ) * stepsize);
+                ) * h);
 
             k(3) := deriv(t, state +
                 ( k(1) * dop3(0)
                 + k(2) * dop3(1)
-                ) * stepsize);
+                ) * h);
 
             k(4) := deriv(t, state +
                 ( k(1) * dop4(0)
                 + k(2) * dop4(1)
                 + k(3) * dop4(2)
-                ) * stepsize);
+                ) * h);
 
             k(5) := deriv(t, state +
                 ( k(1) * dop5(0)
                 + k(2) * dop5(1)
                 + k(3) * dop5(2)
                 + k(4) * dop5(3)
-                ) * stepsize);
+                ) * h);
 
             k(6) := deriv(t, state +
                 ( k(1) * dop6(0)
@@ -222,7 +209,7 @@ package body adaptive_ode_pkg is
                 + k(3) * dop6(2)
                 + k(4) * dop6(3)
                 + k(5) * dop6(4)
-                ) * stepsize);
+                ) * h);
 
             k(7) := deriv(t, state +
                 ( k(1) * dop7(0)
@@ -231,9 +218,11 @@ package body adaptive_ode_pkg is
                 + k(4) * dop7(3)
                 + k(5) * dop7(4)
                 + k(6) * dop7(5)
-                ) * stepsize);
+                ) * h);
 
-            z_n1 := deriv(t, state +
+            y_n1  := state + k(7) * h;
+
+            z := deriv(t, state +
                 ( k(1) * dop8(0)
                 + k(2) * dop8(1)
                 + k(3) * dop8(2)
@@ -241,9 +230,7 @@ package body adaptive_ode_pkg is
                 + k(5) * dop8(4)
                 + k(6) * dop8(5)
                 + k(7) * dop8(6)
-                ) * stepsize);
-
-            y_n1  := state + k(7) * stepsize;
+                ) * h);
 
             vErr := 
                 ( k(1) * (dop8(0) - dop7(0))
@@ -253,9 +240,28 @@ package body adaptive_ode_pkg is
                 + k(5) * (dop8(4) - dop7(4))
                 + k(6) * (dop8(5) - dop7(5))
                 + k(7) *  dop8(6)
-                ) * stepsize;
+                ) * h;
             end rk;
         --------
+        subtype state_array is st_array(1 to 7)(state'range);
+        variable k : state_array;
+        variable y_n1 : real_vector(state'range);
+
+        function fifth_root(X : real) return real is
+        begin
+            return X**(1.0/5.0);
+        end fifth_root;
+
+        procedure stepper is new generic_stepper generic map(fifth_root, minstep, maxstep);
+
+        variable h     : real := stepsize;
+        variable h_new : real ;
+        variable vErr  : real_vector(state'range);
+        variable z     : real_vector(z_n1'range) := z_n1;
+
+        variable run : boolean := true;
+        variable loop_count : natural range 0 to 7 := 0;
+
 
     begin
 
@@ -267,12 +273,12 @@ package body adaptive_ode_pkg is
                 run := false;
             else
                 h := h/4.0;
+                run := true;
             end if;
         end loop;
         z_n1     := z;
         state    := y_n1;
         stepsize := h_new;
-
 
     end generic_adaptive_dopri54;
 
