@@ -48,7 +48,7 @@ begin
         constant l      : real := 100.0e-6;
         constant c      : real := 100.0e-6;
 
-        impure function deriv_lcr (states : real_vector) return real_vector is
+        impure function deriv_lcr(t : real; states : real_vector) return real_vector is
             variable retval : real_vector(0 to 1) := (0.0, 0.0);
         begin
             retval(0) := (u_in - states(0) * 0.1 - states(1)) * (1.0/l);
@@ -94,12 +94,12 @@ begin
 
             if simulation_counter > 0 then
 
-                rk1(lcr_rk1, timestep);
-                rk2(lcr_rk2, timestep);
-                rk4(lcr_rk4, timestep);
+                rk1(realtime, lcr_rk1, timestep);
+                rk2(realtime, lcr_rk2, timestep);
+                rk4(realtime, lcr_rk4, timestep);
 
-                am2(k2,lcr_am2, timestep);
-                am4(k4,lcr_am4, timestep);
+                am2(realtime, k2,lcr_am2, timestep);
+                am4(realtime, k4,lcr_am4, timestep);
 
                 if realtime > 5.0e-3 then i_load := 2.0; end if;
 
