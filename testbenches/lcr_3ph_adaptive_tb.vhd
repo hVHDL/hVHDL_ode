@@ -64,7 +64,7 @@ begin
             return deriv_lcr(states, i_load, input_voltage, l, c, r);
         end deriv;
 
-        procedure rk23 is new generic_adaptive_rk23 generic map(maxstep => 10.0e-3, deriv => deriv);
+        procedure rk23 is new generic_adaptive_dopri54 generic map(maxstep => 10.0e-3, deriv => deriv);
         ------------
 
         variable lcr_rk23 : real_vector(0 to 5) := (others => 0.0);

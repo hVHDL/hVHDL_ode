@@ -6,7 +6,7 @@ LIBRARY ieee  ;
 package adaptive_ode_pkg is 
     constant default_minstep : real := 1.0e-9;
     constant default_maxstep : real := 10.0e-3;
-    constant default_tolerance : real := 3.0e-5;
+    constant default_tolerance : real := 1.0e-5;
 
 ------------------------------------------
     procedure generic_adaptive_rk23
