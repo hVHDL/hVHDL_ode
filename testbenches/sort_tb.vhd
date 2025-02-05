@@ -1,23 +1,4 @@
 
-package pimpom_pkg is
-    type t_pimpom is (a,b,c,d,e,f,g);
-    function "="(a : t_pimpom; b : t_pimpom) return boolean;
-    function "/="(a : t_pimpom; b : t_pimpom) return boolean;
-end pimpom_pkg;
-
-package body pimpom_pkg is
-
-    function "=" (a : t_pimpom; b : t_pimpom) return boolean is
-    begin
-        return a = b;
-    end function;
-
-    function "/=" (a : t_pimpom; b : t_pimpom) return boolean is
-    begin
-        return a /= b;
-    end function;
-
-end pimpom_pkg;
 
 LIBRARY ieee  ; 
     USE ieee.NUMERIC_STD.all  ; 
@@ -27,19 +8,19 @@ LIBRARY ieee  ;
 library vunit_lib;
 context vunit_lib.vunit_context;
 
+
 entity sort_tb is
   generic (runner_cfg : string);
 end;
 
+package pimpom_pkg is
+    type t_pimpom is (a,b,c,d,e,f,g);
+end pimpom_pkg;
+
 architecture vunit_simulation of sort_tb is
 
-    use work.pimpom_pkg.all;
-
-    package sort_pkg is new work.sort_generic_pkg generic map (
-        work.pimpom_pkg.t_pimpom
-        , "="  => work.pimpom_pkg."="
-        , "/=" => work.pimpom_pkg."/=");
-
+    use work.pimpom_pkg.t_pimpom;
+    package sort_pkg is new work.sort_generic_pkg generic map (t_pimpom);
     use sort_pkg.all;
 
     constant clock_period      : time    := 1 ns;
