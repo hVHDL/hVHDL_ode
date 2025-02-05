@@ -1,4 +1,24 @@
 
+package pimpom_pkg is
+    type t_pimpom is (a,b,c,d,e,f,g);
+    function "="(a : t_pimpom; b : t_pimpom) return boolean;
+    function "/="(a : t_pimpom; b : t_pimpom) return boolean;
+end pimpom_pkg;
+
+package body pimpom_pkg is
+
+    function "=" (a : t_pimpom; b : t_pimpom) return boolean is
+    begin
+        return a = b;
+    end function;
+
+    function "/=" (a : t_pimpom; b : t_pimpom) return boolean is
+    begin
+        return a /= b;
+    end function;
+
+end pimpom_pkg;
+
 LIBRARY ieee  ; 
     USE ieee.NUMERIC_STD.all  ; 
     USE ieee.std_logic_1164.all  ; 
@@ -7,13 +27,20 @@ LIBRARY ieee  ;
 library vunit_lib;
 context vunit_lib.vunit_context;
 
-    use work.sort_pkg.all;
-
 entity sort_tb is
   generic (runner_cfg : string);
 end;
 
 architecture vunit_simulation of sort_tb is
+
+    use work.pimpom_pkg.all;
+
+    package sort_pkg is new work.sort_generic_pkg generic map (
+        work.pimpom_pkg.t_pimpom
+        , "="  => work.pimpom_pkg."="
+        , "/=" => work.pimpom_pkg."/=");
+
+    use sort_pkg.all;
 
     constant clock_period      : time    := 1 ns;
 
@@ -24,6 +51,13 @@ architecture vunit_simulation of sort_tb is
     constant sorted_vector : real_vector(0 to 4) := (0.0, 1.0, 2.0, 3.0, 4.0);
 
     signal test_vector : real_vector(mixed_vector'range) := mixed_vector;
+    signal another_test_vector : event_array(0 to 4) :=(
+    (mixed_vector(0), a)
+    ,(mixed_vector(1), b)
+    ,(mixed_vector(2), c)
+    ,(mixed_vector(3), d)
+    ,(mixed_vector(4), e)
+    );
 
 begin
 
@@ -32,6 +66,7 @@ begin
         test_runner_setup(runner, runner_cfg);
         wait until simulation_counter = 5;
         check(test_vector = sorted_vector);
+        check(another_test_vector = sorted_vector);
         test_runner_cleanup(runner); -- Simulation ends here
         wait;
     end process simtime;	
@@ -45,6 +80,7 @@ begin
             simulation_counter <= simulation_counter + 1;
 
             test_vector <= insertion_sort(mixed_vector);
+            another_test_vector <= insertion_sort(another_test_vector);
 
         end if; -- rising_edge
     end process stimulus;	
