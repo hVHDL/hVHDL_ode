@@ -33,11 +33,11 @@ architecture vunit_simulation of sort_tb is
 
     signal test_vector : real_vector(mixed_vector'range) := mixed_vector;
     signal another_test_vector : event_array(0 to 4) :=(
-    (mixed_vector(0), a)
-    ,(mixed_vector(1), b)
-    ,(mixed_vector(2), c)
-    ,(mixed_vector(3), d)
-    ,(mixed_vector(4), e)
+    (a, mixed_vector(0))
+    ,(b, mixed_vector(1))
+    ,(c, mixed_vector(2))
+    ,(d, mixed_vector(3))
+    ,(e, mixed_vector(4))
     );
 
 begin

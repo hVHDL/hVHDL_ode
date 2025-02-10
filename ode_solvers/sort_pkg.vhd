@@ -7,11 +7,13 @@ package sort_generic_pkg is
 
     ------------------
     type event_record is record
-        time_until_event : real;
         event_number : g_sorted_type;
+        time_until_event : real;
     end record;
 
     type event_array is array (natural range <>) of event_record;
+    ------------------
+    function "-" (left : event_array; right : real) return event_array;
     ------------------
     function insertion_sort(arr : event_array) return event_array;
     ------------------
@@ -24,6 +26,17 @@ end sort_generic_pkg;
 
 package body sort_generic_pkg is
 
+    ------------------
+    function "-" (left : event_array; right : real) return event_array is
+        variable retval : event_array(left'range) := left;
+    begin
+        for i in left'range loop
+            retval(i).time_until_event := left(i).time_until_event - right;
+        end loop;
+
+        return retval;
+
+    end function;
     ------------------
     function ">" (left : event_record; right : event_record) return boolean is
     begin
@@ -45,6 +58,7 @@ package body sort_generic_pkg is
         return compared_vector = right;
 
     end function;
+    ------------------
     ------------------
     function insertion_sort(arr : event_array) return event_array is
         variable sorted_arr : event_array(arr'range) := arr; -- Copy input array
@@ -94,4 +108,3 @@ package body sort_generic_pkg is
     ------------------
 
 end sort_generic_pkg;
-
