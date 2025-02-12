@@ -13,7 +13,9 @@ package sort_generic_pkg is
 
     type event_array is array (natural range <>) of event_record;
     ------------------
-    function "-" (left : event_array; right : real) return event_array;
+    function get_time_until_event(sim_event : event_record) return real;
+    ------------------
+    function find_smallest(arr: event_array) return real;
     ------------------
     function insertion_sort(arr : event_array) return event_array;
     ------------------
@@ -21,11 +23,20 @@ package sort_generic_pkg is
     ------------------
     function "=" (left : event_array; right : real_vector) return boolean;
     ------------------
+    function "-" (left : event_array; right : real) return event_array;
+    ------------------
 
 end sort_generic_pkg;
 
 package body sort_generic_pkg is
 
+    ------------------
+    function get_time_until_event(sim_event : event_record) return real is
+    begin
+
+        return sim_event.time_until_event;
+
+    end get_time_until_event;
     ------------------
     function "-" (left : event_array; right : real) return event_array is
         variable retval : event_array(left'range) := left;
@@ -59,6 +70,17 @@ package body sort_generic_pkg is
 
     end function;
     ------------------
+    function find_smallest(arr: event_array) return real is
+        variable min_val: real := get_time_until_event(arr(0)); -- Initialize with the first element
+    begin
+            for i in arr'range loop
+                if get_time_until_event(arr(i)) < min_val then
+                    min_val := get_time_until_event(arr(i)); -- Update the minimum value
+                end if;
+            end loop;
+        return min_val;
+    end find_smallest;
+
     ------------------
     function insertion_sort(arr : event_array) return event_array is
         variable sorted_arr : event_array(arr'range) := arr; -- Copy input array
