@@ -43,7 +43,7 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable timestep : real := 7.0e-6;
+        variable timestep : real := 10.0e-6;
         variable simtime : real := 0.0;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
@@ -79,6 +79,7 @@ begin
         variable lcr_rk1 : lcr_model_3ph_record := init_lcr_model;
         variable lcr_rk2 : lcr_model_3ph_record := init_lcr_model;
         variable lcr_rk4 : lcr_model_3ph_record := init_lcr_model;
+        variable lcr_rk5 : lcr_model_3ph_record := init_lcr_model;
 
         variable lcr_am2 : lcr_model_3ph_record := init_lcr_model;
         variable lcr_am4 : lcr_model_3ph_record := init_lcr_model;
@@ -89,39 +90,40 @@ begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
             if simulation_counter = 0 then
-                init_simfile(file_handler, ("time", 
-                "T_u0",
-                "T_u1",
-                "T_u2",
-                "B_i0",
-                "B_i1",
-                "B_i2",
-                "B_st"
+                init_simfile(file_handler, ("time"
+                ,"T_u0"
+                ,"T_u1"
+                ,"T_u2"
+                ,"B_i0"
+                ,"B_i1"
+                ,"B_i2"
+                -- "B_st"
                 ));
             end if;
 
             if simulation_counter > 0 then
 
                 write_to(file_handler,(realtime
-                        -- ,get_capacitor_voltage(lcr_rk2)(0)
-                        -- ,get_capacitor_voltage(lcr_rk2)(1)
-                        -- ,get_capacitor_voltage(lcr_rk2)(2)
-                        -- ,get_inductor_current(lcr_rk2)(0)
-                        -- ,get_inductor_current(lcr_rk2)(1)
-                        -- ,get_inductor_current(lcr_rk2)(2)
+                        ,get_capacitor_voltage(lcr_rk4)(1)
+                        ,get_capacitor_voltage(lcr_rk5)(1)
+                        ,get_capacitor_voltage(lcr_rk2)(1)
+                        ,get_inductor_current(lcr_rk4)(1)
+                        ,get_inductor_current(lcr_rk5)(1)
+                        ,get_inductor_current(lcr_rk2)(1)
                         --
-                        ,get_capacitor_voltage(lcr_am2)(0)
-                        ,get_capacitor_voltage(lcr_am2)(1)
-                        ,get_capacitor_voltage(lcr_am2)(2)
-                        ,get_inductor_current(lcr_am2)(0)
-                        ,get_inductor_current(lcr_am2)(1)
-                        ,get_inductor_current(lcr_am2)(2)
+                        -- ,get_capacitor_voltage(lcr_am2)(0)
+                        -- ,get_capacitor_voltage(lcr_am2)(1)
+                        -- ,get_capacitor_voltage(lcr_am2)(2)
+                        -- ,get_inductor_current(lcr_am2)(0)
+                        -- ,get_inductor_current(lcr_am2)(1)
+                        -- ,get_inductor_current(lcr_am2)(2)
 
-                        ,timestep
+                        -- ,timestep
                     ));
                 rk1(realtime , lcr_rk1.states , timestep);
                 rk2(realtime , lcr_rk2.states , timestep);
                 rk4(realtime , lcr_rk4.states , timestep);
+                rk5(realtime , lcr_rk5.states , timestep);
 
                 am2(realtime , k2 , lcr_am2.states , timestep);
                 am4(realtime , k4 , lcr_am4.states , timestep);
