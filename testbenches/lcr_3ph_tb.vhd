@@ -68,6 +68,7 @@ begin
         procedure rk1 is new generic_rk1 generic map(deriv);
         procedure rk2 is new generic_rk2 generic map(deriv);
         procedure rk4 is new generic_rk4 generic map(deriv);
+        procedure rk5 is new generic_rk5 generic map(deriv);
 
         variable k2 : am_state_array(1 to 4)(0 to 5) := (others => (others => 0.0));
         procedure am2 is new am2_generic generic map(deriv);
