@@ -30,13 +30,13 @@ architecture vunit_simulation of lcr_3ph_tb is
 begin
 
 ------------------------------------------------------------------------
-    simtime : process
+    simulation_time : process
     begin
         test_runner_setup(runner, runner_cfg);
         wait until realtime >= stoptime;
         test_runner_cleanup(runner); -- Simulation ends here
         wait;
-    end process simtime;	
+    end process simulation_time;	
 
     simulator_clock <= not simulator_clock after clock_period/2.0;
 ------------------------------------------------------------------------
@@ -44,7 +44,6 @@ begin
     stimulus : process(simulator_clock)
 
         variable timestep : real := 10.0e-6;
-        variable simtime : real := 0.0;
 
         variable i_load : real_vector (0 to 1) := (others => 0.0);
 
