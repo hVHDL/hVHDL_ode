@@ -25,5 +25,6 @@ ode.add_source_files(ROOT / "ode_examples/grid_inverter_control_tb.vhd")
 
 ode.add_source_files(ROOT / "testbenches/sort_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/template_tb.vhd")
+ode.add_source_files(ROOT / "testbenches/fc_4level_tb.vhd")
 
 VU.main()
