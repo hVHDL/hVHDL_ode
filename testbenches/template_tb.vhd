@@ -25,7 +25,6 @@ architecture vunit_simulation of template_tb is
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant timestep : real := 10.0e-6;
     constant stoptime : real := 1.0e-3;
 
 begin
@@ -48,17 +47,40 @@ begin
         variable i_load : real := 0.0;
         constant l      : real := 1.0e-6;
         constant c      : real := 100.0e-6;
-        constant rl     : real := 30.0e-3;
-        constant cfc    : real := 20.0e-6;
+        constant rl     : real := 20.0e-3;
+        constant cfc    : real := 40.0e-6;
 
         variable sw_frequency : real := 200.0e3;
         variable t_sw : real := 1.0/sw_frequency;
         variable duty : real := 0.5;
 
+        ----------------------
+        function fc_modulator
+        (
+            gate_signals : bit_vector
+        )
+        return real is
+            variable retval : real;
+        begin
+            CASE gate_signals is
+                WHEN "10" => retval := -1.0;
+                WHEN "01" => retval := 1.0;
+                WHEN others => retval := 0.0;
+            end CASE;
+            
+            return retval;
+        end fc_modulator;
+        ----------------------
+
         -- i_l, uc, ufc
         constant init_state_vector : real_vector := (0 => 0.0, 1 => 0.0,  2 => udc*0.45);
 
-        type sw_states is (dc, p_half, n_half, zero);
+        subtype sw_states is bit_vector(1 downto 0);
+
+        constant dc     : bit_vector(1 downto 0) := "11";
+        constant p_half : bit_vector(1 downto 0) := "10";
+        constant n_half : bit_vector(1 downto 0) := "01";
+        constant zero   : bit_vector(1 downto 0) := "00";
 
         type sw_state_record is record
             sw_state : sw_states;
@@ -129,18 +151,16 @@ begin
             variable bridge_voltage : real := 0.0;
         begin
 
-            if realtime > 250.0e-6 then i_load := 10.0; end if;
-            if realtime > 600.0e-6 then duty := 0.8; end if;
+            if t > 250.0e-6 then i_load := 10.0; end if;
+            if t > 600.0e-6 then duty := 0.8; end if;
 
-            bridge_voltage := get_bridge_voltage(sw_state, udc, ufc => (0 => states(2)));
-            retval(0) := (bridge_voltage - states(0) * rl     - states(1)) * (1.0/l);
+            bridge_voltage := 
+                fc_modulator(('0', sw_state(1))) * udc
+              + fc_modulator((sw_state(1), sw_state(0))) * states(2);
+
+            retval(0) := (bridge_voltage - states(0) * rl - states(1)) * (1.0/l);
             retval(1) := (states(0)      - i_load) * (1.0/c);
-
-            CASE sw_state is
-                WHEN p_half => retval(2) := states(0)/cfc;
-                WHEN n_half => retval(2) := -states(0)/cfc;
-                WHEN others => retval(2) := 0.0;
-            end CASE;
+            retval(2) := fc_modulator((sw_state(1), sw_state(0))) * states(0);
 
             return retval;
 
@@ -149,8 +169,6 @@ begin
         procedure rk5 is new generic_rk5 generic map(deriv_lcr);
 
         variable lcr_rk5 : init_state_vector'subtype := init_state_vector;
-        variable prev_states : init_state_vector'subtype := init_state_vector;
-        variable sampled_states : init_state_vector'subtype := init_state_vector;
 
         file file_handler : text open write_mode is "template_tb.dat";
         use ode.real_vector_pkg.all;
