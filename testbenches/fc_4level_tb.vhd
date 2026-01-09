@@ -1,3 +1,4 @@
+----------------------------------
 LIBRARY ieee  ; 
     USE ieee.NUMERIC_STD.all  ; 
     USE ieee.std_logic_1164.all  ; 
@@ -44,11 +45,11 @@ begin
     stimulus : process(simulator_clock)
 
         variable udc    : real := 200.0;
-        variable i_load : real := 0.0;
+        variable i_load : real := -10.0;
         constant l      : real := 10.0e-6;
         constant c      : real := 10.0e-6;
-        constant rl     : real := 20.0e-3;
-        constant cfc    : real := 4.7e-6;
+        constant rl     : real := 50.0e-3;
+        constant cfc    : real := 4.25e-6;
 
         variable sw_frequency : real := 250.0e3;
         variable t_sw : real := 1.0/sw_frequency;
@@ -73,7 +74,7 @@ begin
         ----------------------
 
         -- i_l, uc, ufc
-        constant init_state_vector : real_vector := (0 => 0.0, 1 => 150.0,  2 => udc*1.0/3.0, 3 => udc*2.0/3.0);
+        constant init_state_vector : real_vector := (0 => 0.0, 1 => 150.0,  2 => 66.0, 3 => 132.0);
 
         subtype sw_states is bit_vector(2 downto 0);
 
@@ -126,17 +127,17 @@ begin
 
         end get_step_length;
         ----------
-        function get_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
+        function get_fc_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
             variable bridge_voltage : real := 0.0;
         begin
 
-            bridge_voltage := 
-                fc_modulator(sw_state(1 downto 0)) * ufc(0)
-              + fc_modulator(sw_state(2 downto 1)) * ufc(1)
-              + fc_modulator(('0', sw_state(sw_state'high)))   * udc;
+            for i in ufc'range loop
+                bridge_voltage := bridge_voltage + fc_modulator(sw_state(i+1 downto i)) * ufc(i);
+            end loop;
+            bridge_voltage := bridge_voltage + fc_modulator('0' & sw_state(sw_state'high)) * udc;
 
             return bridge_voltage;
-        end get_bridge_voltage;
+        end get_fc_bridge_voltage;
 
         ----------
         impure function deriv_lcr(t : real; states : real_vector) return real_vector is
@@ -153,7 +154,7 @@ begin
             if t > 5.0e-3 then udc := 170.0; end if;
             -- if t > 10.0e-3 then udc := 10.0; end if;
 
-            bridge_voltage :=  get_bridge_voltage(sw_state, udc, (ufc1, ufc2));
+            bridge_voltage :=  get_fc_bridge_voltage(sw_state, udc, (ufc1, ufc2));
 
             retval(0) := (bridge_voltage - il * rl - uc) * (1.0/l);
             retval(1) := (il - i_load - uc/15.0) * (1.0/c);
@@ -187,7 +188,7 @@ begin
 
             write_to(file_handler,(realtime
                     ,lcr_rk5(0) 
-                    -- ,get_bridge_voltage(prev_sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
+                    -- ,get_fc_bridge_voltage(prev_sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
                     ,lcr_rk5(1) 
                     ,lcr_rk5(2) 
                     ,lcr_rk5(3) 
@@ -196,7 +197,7 @@ begin
 
             write_to(file_handler,(realtime
                     ,lcr_rk5(0) 
-                    -- ,get_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
+                    -- ,get_fc_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
                     ,lcr_rk5(1) 
                     ,lcr_rk5(2) 
                     ,lcr_rk5(3) 
