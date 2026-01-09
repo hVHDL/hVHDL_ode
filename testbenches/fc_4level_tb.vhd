@@ -43,14 +43,14 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable udc    : real := 10.0;
+        variable udc    : real := 200.0;
         variable i_load : real := 0.0;
-        constant l      : real := 1.0e-6;
-        constant c      : real := 100.0e-6;
+        constant l      : real := 10.0e-6;
+        constant c      : real := 10.0e-6;
         constant rl     : real := 20.0e-3;
-        constant cfc    : real := 40.0e-6;
+        constant cfc    : real := 4.7e-6;
 
-        variable sw_frequency : real := 200.0e3;
+        variable sw_frequency : real := 250.0e3;
         variable t_sw : real := 1.0/sw_frequency;
         variable duty : real := 0.6;
 
@@ -73,7 +73,7 @@ begin
         ----------------------
 
         -- i_l, uc, ufc
-        constant init_state_vector : real_vector := (0 => 0.0, 1 => 0.0,  2 => udc*1.0/3.0, 3 => udc*2.0/3.0);
+        constant init_state_vector : real_vector := (0 => 0.0, 1 => 150.0,  2 => udc*1.0/3.0, 3 => udc*2.0/3.0);
 
         subtype sw_states is bit_vector(2 downto 0);
 
@@ -133,7 +133,7 @@ begin
             bridge_voltage := 
                 fc_modulator(sw_state(1 downto 0)) * ufc(0)
               + fc_modulator(sw_state(2 downto 1)) * ufc(1)
-              + fc_modulator(('0', sw_state(2)))   * udc;
+              + fc_modulator(('0', sw_state(sw_state'high)))   * udc;
 
             return bridge_voltage;
         end get_bridge_voltage;
@@ -148,17 +148,15 @@ begin
             alias ufc2 is states(3);
         begin
 
-            if t > 250.0e-6 then i_load := 10.0; end if;
-            if t > 600.0e-6 then duty := 0.4; end if;
-            if t > 5.0e-3 then udc := 15.0; end if;
+            -- if t > 250.0e-6 then i_load := 10.0; end if;
+            -- if t > 600.0e-6 then duty := 0.4; end if;
+            if t > 5.0e-3 then udc := 170.0; end if;
+            -- if t > 10.0e-3 then udc := 10.0; end if;
 
-            bridge_voltage := 
-                fc_modulator(sw_state(1 downto 0)) * ufc1
-              + fc_modulator(sw_state(2 downto 1)) * ufc2
-              + fc_modulator(('0', sw_state(2)))   * udc;
+            bridge_voltage :=  get_bridge_voltage(sw_state, udc, (ufc1, ufc2));
 
             retval(0) := (bridge_voltage - il * rl - uc) * (1.0/l);
-            retval(1) := (il - i_load) * (1.0/c);
+            retval(1) := (il - i_load - uc/15.0) * (1.0/c);
             retval(2) := -fc_modulator(sw_state(1 downto 0)) * il / cfc;
             retval(3) := -fc_modulator(sw_state(2 downto 1)) * il / cfc;
 
@@ -171,41 +169,43 @@ begin
         variable lcr_rk5 : init_state_vector'subtype := init_state_vector;
 
         file file_handler : text open write_mode is "fc_4level_tb.dat";
-        use ode.real_vector_pkg.all;
+
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
+
             if simulation_counter = 0 then
                 init_simfile(file_handler, ("time"
                 ,"T_i0"
-                ,"B_u0"
+                -- ,"B_u0"
                 ,"B_u1"
                 ,"B_u2"
                 ,"B_u3"
+                ,"B_u4"
                 ));
             end if;
 
-
-            realtime <= realtime + get_step_length;
-
             write_to(file_handler,(realtime
                     ,lcr_rk5(0) 
-                    ,get_bridge_voltage(prev_sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
+                    -- ,get_bridge_voltage(prev_sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
                     ,lcr_rk5(1) 
                     ,lcr_rk5(2) 
                     ,lcr_rk5(3) 
+                    ,udc
                 ));
 
             write_to(file_handler,(realtime
                     ,lcr_rk5(0) 
-                    ,get_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
+                    -- ,get_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
                     ,lcr_rk5(1) 
                     ,lcr_rk5(2) 
                     ,lcr_rk5(3) 
+                    ,udc
                 ));
 
             rk5(realtime, lcr_rk5, get_step_length);
 
+            realtime <= realtime + get_step_length;
             prev_sw_state := sw_state;
             sw_state      := next_sw_state;
             next_sw_state := get_next_sw_state(sw_state, prev_sw_state);
