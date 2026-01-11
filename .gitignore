@@ -20,3 +20,4 @@ __pycache__
 *.cir
 *.utf8
 *.toml
+*.json
