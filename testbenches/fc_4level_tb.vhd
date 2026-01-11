@@ -49,11 +49,11 @@ begin
         constant l      : real := 10.0e-6;
         constant c      : real := 10.0e-6;
         constant rl     : real := 50.0e-3;
-        constant cfc    : real := 4.25e-6;
+        constant cfc    : real := 4.7e-6;
 
         variable sw_frequency : real := 250.0e3;
         variable t_sw : real := 1.0/sw_frequency;
-        variable duty : real := 0.6;
+        variable duty : real := 0.58;
 
         ----------------------
         function fc_modulator
@@ -137,6 +137,7 @@ begin
             bridge_voltage := bridge_voltage + fc_modulator('0' & sw_state(sw_state'high)) * udc;
 
             return bridge_voltage;
+
         end get_fc_bridge_voltage;
 
         ----------
