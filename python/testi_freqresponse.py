@@ -5,6 +5,16 @@ import numpy as np
 
 
 ode_data = pd.read_csv("./fc_4level_tb.dat", sep='\s+') 
-f,y,_ = frequency_response(ode_data["B_u3"], ode_data["B_u4"] , fs = 500e3, nperseg = 10000) 
-pyplot.plot(f,20*np.log10((np.abs (y))))
+f,y,_ = frequency_response(ode_data["B_u5"], ode_data["T_i0"] , fs = 500e3, nperseg = 10000) 
+
+fig, (ax1, ax2) = pyplot.subplots(2, 1
+                                  ,sharex=True
+                                  , figsize=(8, 4))  # figsize=(width, height)
+
+ax1.semilogx(f,np.log10((np.abs (y))))
+ax1.set_xlim(1000,250e3)
+ax1.grid(True)
+ax2.semilogx(f,((np.angle (y))))
+ax2.grid(True)
+pyplot.tight_layout()
 pyplot.show()

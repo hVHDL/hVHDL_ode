@@ -205,7 +205,7 @@ begin
                     ,lcr_rk5(1) 
                     ,lcr_rk5(2) 
                     ,lcr_rk5(3) 
-                    ,udc + rand
+                    ,udc
                     ,duty
                 ));
 
