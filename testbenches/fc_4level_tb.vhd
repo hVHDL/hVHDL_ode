@@ -26,7 +26,26 @@ architecture vunit_simulation of fc_4level_tb is
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant stoptime : real := 10.0e-3;
+    constant stoptime : real := 1000.0e-3;
+
+    ----------------------
+    function fc_modulator
+    (
+        gate_signals : bit_vector
+    )
+    return real is
+        variable retval : real;
+    begin
+        CASE gate_signals is
+            WHEN "10" => retval := -1.0;
+            WHEN "01" => retval := 1.0;
+            WHEN others => retval := 0.0;
+        end CASE;
+        
+        return retval;
+    end fc_modulator;
+    ----------------------
+
 
 begin
 
@@ -48,30 +67,15 @@ begin
         variable i_load : real := -10.0;
         constant l      : real := 10.0e-6;
         constant c      : real := 10.0e-6;
-        constant rl     : real := 50.0e-3;
+        constant rl     : real := 10.0e-3;
         constant cfc    : real := 4.7e-6;
 
-        variable sw_frequency : real := 250.0e3;
+        variable sw_frequency : real := 500.0e3;
         variable t_sw : real := 1.0/sw_frequency;
-        variable duty : real := 0.58;
+        variable duty : real := 0.5;
 
-        ----------------------
-        function fc_modulator
-        (
-            gate_signals : bit_vector
-        )
-        return real is
-            variable retval : real;
-        begin
-            CASE gate_signals is
-                WHEN "10" => retval := -1.0;
-                WHEN "01" => retval := 1.0;
-                WHEN others => retval := 0.0;
-            end CASE;
-            
-            return retval;
-        end fc_modulator;
-        ----------------------
+        variable seed1, seed2 : positive := 1;
+        variable rand : real;
 
         -- i_l, uc, ufc
         constant init_state_vector : real_vector := (0 => 0.0, 1 => 150.0,  2 => 66.0, 3 => 132.0);
@@ -119,7 +123,7 @@ begin
         begin
 
             case sw_state is
-                WHEN "111"  => step_length := t_sw * duty;
+                WHEN "111"  => step_length := t_sw * (duty);
                 WHEN others => step_length := t_sw * (1.0-duty);
             end CASE;
 
@@ -152,13 +156,13 @@ begin
 
             -- if t > 250.0e-6 then i_load := 10.0; end if;
             -- if t > 600.0e-6 then duty := 0.4; end if;
-            if t > 5.0e-3 then udc := 170.0; end if;
+            -- if t > 5.0e-3 then udc := 170.0; end if;
             -- if t > 10.0e-3 then udc := 10.0; end if;
 
             bridge_voltage :=  get_fc_bridge_voltage(sw_state, udc, (ufc1, ufc2));
 
             retval(0) := (bridge_voltage - il * rl - uc) * (1.0/l);
-            retval(1) := (il - i_load - uc/15.0) * (1.0/c);
+            retval(1) := (il ) * (1.0/c);
             retval(2) := -fc_modulator(sw_state(1 downto 0)) * il / cfc;
             retval(3) := -fc_modulator(sw_state(2 downto 1)) * il / cfc;
 
@@ -172,38 +176,47 @@ begin
 
         file file_handler : text open write_mode is "fc_4level_tb.dat";
 
+
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
 
+            uniform(seed1, seed2, rand);
+            rand := ((rand - 0.5) * 2.0) * 0.01;
+
+            duty := 0.5 + rand;
+
             if simulation_counter = 0 then
                 init_simfile(file_handler, ("time"
                 ,"T_i0"
-                -- ,"B_u0"
+                ,"B_u0"
                 ,"B_u1"
                 ,"B_u2"
                 ,"B_u3"
                 ,"B_u4"
+                ,"B_u5"
                 ));
             end if;
 
             write_to(file_handler,(realtime
                     ,lcr_rk5(0) 
                     -- ,get_fc_bridge_voltage(prev_sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
+                    ,rand
                     ,lcr_rk5(1) 
                     ,lcr_rk5(2) 
                     ,lcr_rk5(3) 
-                    ,udc
+                    ,udc + rand
+                    ,duty
                 ));
 
-            write_to(file_handler,(realtime
-                    ,lcr_rk5(0) 
-                    -- ,get_fc_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
-                    ,lcr_rk5(1) 
-                    ,lcr_rk5(2) 
-                    ,lcr_rk5(3) 
-                    ,udc
-                ));
+            -- write_to(file_handler,(realtime
+            --         ,lcr_rk5(0) 
+            --         -- ,get_fc_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
+            --         ,lcr_rk5(1) 
+            --         ,lcr_rk5(2) 
+            --         ,lcr_rk5(3) 
+            --         ,udc
+            --     ));
 
             rk5(realtime, lcr_rk5, get_step_length);
 
