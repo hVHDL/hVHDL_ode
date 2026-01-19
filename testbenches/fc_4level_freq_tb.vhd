@@ -12,11 +12,11 @@ context vunit_lib.vunit_context;
     use ode.write_pkg.all;
     use ode.ode_pkg.all;
 
-entity fc_4level_tb is
+entity fc_4level_freq_tb is
   generic (runner_cfg : string);
 end;
 
-architecture vunit_simulation of fc_4level_tb is
+architecture vunit_simulation of fc_4level_freq_tb is
 
     constant clock_period : time := 1 ns;
     
@@ -26,7 +26,7 @@ architecture vunit_simulation of fc_4level_tb is
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant stoptime : real := 1000.0e-3;
+    constant stoptime : real := 500.0e-3;
 
     ----------------------
     function fc_modulator

@@ -2,7 +2,7 @@ import numpy as np
 from scipy import signal
 
 
-def frequency_response(x, y, fs=1.0, nperseg=1024, window='flattop', 
+def freq_response(x, y, fs=1.0, nperseg=1024, window='flattop', 
                       scaling='spectrum', detrend='constant'):
     """
     Estimate frequency response H(f) = Y(f)/X(f) using cross power spectral density
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     y = signal.lfilter(*signal.butter(8, 150/(fs/2), btype='low'), x) + 0.2*np.random.randn(len(t))
     
     # Calculate frequency response
-    f, H, coh = frequency_response(x, y, fs=fs, nperseg=1000)
+    f, H, coh = freq_response(x, y, fs=fs, nperseg=1000)
     
     # Plot
     plt.figure(figsize=(12, 8))
