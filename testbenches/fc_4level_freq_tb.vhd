@@ -68,7 +68,7 @@ begin
         constant l      : real := 10.0e-6;
         constant c      : real := 10.0e-6;
         constant rl     : real := 10.0e-3;
-        constant cfc    : real := 4.7e-6;
+        constant cfc    : real := 4.0e-6;
 
         variable sw_frequency : real := 500.0e3;
         variable t_sw : real := 1.0/sw_frequency;
@@ -189,7 +189,10 @@ begin
             uniform(seed1, seed2, rand);
             rand := ((rand - 0.5) * 2.0) * 0.001;
 
-            duty := 0.5 + rand;
+            if simulation_counter mod 1 = 0
+            then
+                duty := 0.5 + rand;
+            end if;
 
             write_to(file_handler,(realtime
                     ,lcr_rk5(0) --,"T_i0" 

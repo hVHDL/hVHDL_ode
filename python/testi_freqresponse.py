@@ -26,7 +26,7 @@ frequencies = f*2*np.pi
 
 fig, (ax1, ax2) = pyplot.subplots(2, 1
                                   ,sharex=True
-                                  , figsize=(8, 4))  # figsize=(width, height)
+                                  ,figsize=(8, 4))
 
 w, H = freqresp(ss_model, frequencies)
 
