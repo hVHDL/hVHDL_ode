@@ -177,6 +177,9 @@ begin
         variable steplength : real := t_sw * (duty);
         variable high_time  : real := t_sw * (duty);
         variable low_time   : real := t_sw * (1.0-duty);
+        variable pwm : bit := '1';
+        variable modulator_reference : real := 167.0;
+        variable fc_duty : real := 0.5;
 
     begin
         if rising_edge(simulator_clock) then
@@ -193,21 +196,13 @@ begin
             end if;
             -------------------------
 
-            uniform(seed1, seed2, rand);
-            rand := ((rand - 0.5) * 2.0) * 0.001;
-
-            if simulation_counter mod 1 = 0
-            then
-                duty := 0.5 + rand;
-            end if;
-
             write_to(file_handler,(realtime
-                    ,lcr_rk5(0) --,"T_i0" 
-                    ,lcr_rk5(1) --,"B_u0"
-                    ,lcr_rk5(2) --,"B_u1"
-                    ,lcr_rk5(3) --,"B_u2"
-                    ,udc        --,"B_u3"
-                    ,duty       --,"B_u4"
+                    ,lcr_rk5(0)          -- ,"T_i0"
+                    ,lcr_rk5(1)          -- ,"B_u0"
+                    ,lcr_rk5(2)          -- ,"B_u1"
+                    ,lcr_rk5(3)          -- ,"B_u2"
+                    ,udc                 -- ,"B_u3"
+                    ,modulator_reference -- ,"B_u4"
                 ));
 
             -- write_to(file_handler,(realtime
@@ -222,11 +217,44 @@ begin
             rk5(realtime, lcr_rk5, steplength);
             realtime <= realtime + steplength;
 
-            steplength := get_step_length;
+            uniform(seed1, seed2, rand);
+            rand := ((rand - 0.5) * 2.0) * 1.0;
+
+            if simulation_counter mod 1 = 0
+            then
+                modulator_reference := 167.0 + rand;
+            end if;
+
+            ------- modulator -----------
+            fc_duty   := (modulator_reference - udc*0.0/3.0)/(udc*1.0/3.0);
+
+            if modulator_reference > udc*1.0/3.0
+            then
+                fc_duty := (modulator_reference - udc*1.0/3.0)/(udc*1.0/3.0);
+            end if;
+
+            if modulator_reference > udc*2.0/3.0
+            then
+                fc_duty := (modulator_reference - udc*2.0/3.0)/(udc*1.0/3.0);
+            end if;
+
+            high_time := t_sw * fc_duty;
+            low_time  := t_sw * (1.0-fc_duty);
+
+            pwm := not pwm;
+            if pwm = '1'
+            then
+                steplength := high_time;
+            else
+                steplength := low_time;
+            end if;
 
             prev_sw_state := sw_state;
             sw_state      := next_sw_state;
             next_sw_state := get_next_sw_state(sw_state, prev_sw_state);
+
+            -----------------------------
+
 
         end if; -- rising_edge
     end process stimulus;	

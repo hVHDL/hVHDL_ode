@@ -14,8 +14,8 @@ ssA = np.array([[0, 1/C],
 ssB = np.array([[0],
               [1/L]])
 
-ssUC = np.array([[0, 1]])
-ssIL = np.array([[1, 0]])
+ssUC = np.array([[1, 0]])
+ssIL = np.array([[0, 1]])
 
 iL_model = StateSpace(ssA, ssB, ssIL, np.array([0]))
 uC_model = StateSpace(ssA, ssB, ssUC, np.array([0]))
@@ -32,18 +32,18 @@ fig, (ax1, ax2) = pyplot.subplots(2, 1
                                   ,figsize=(8, 4))
 
 w, ssIL = freqresp(iL_model, frequencies)
-w, ssUC = freqresp(iL_model, frequencies)
+w, ssUC = freqresp(uC_model, frequencies)
 
-ax1.semilogx(f,-36+20*np.log10((np.abs (uC))))
-# ax1.semilogx(f,20*np.log10((np.abs (iL))))
-# ax1.semilogx(f,37+20*np.log10((np.abs (ssIL))))
+ax1.semilogx(f,20*np.log10((np.abs (iL))))
+ax1.semilogx(f,20*np.log10((np.abs (ssIL))))
+ax1.semilogx(f,20*np.log10((np.abs (uC))))
 ax1.semilogx(f,20*np.log10((np.abs (ssUC))))
 ax1.set_xlim(1000,500e3)
 ax1.set_ylim(-60,50)
 ax1.grid(True)
-# ax2.semilogx(f,np.degrees((np.angle (iL))))
-ax2.semilogx(f,np.degrees(np.angle (uC * (1j))) - 90)
-# ax2.semilogx(f,np.degrees((np.angle (ssIL))))
+ax2.semilogx(f,np.degrees((np.angle (iL))))
+ax2.semilogx(f,np.degrees((np.angle (ssIL))))
+ax2.semilogx(f,np.degrees(np.angle (uC)))
 ax2.semilogx(f,np.degrees((np.angle (ssUC))))
 ax2.grid(True)
 pyplot.tight_layout()
