@@ -169,7 +169,14 @@ begin
 
         variable lcr_rk5 : init_state_vector'subtype := init_state_vector;
 
+
         file file_handler : text open write_mode is "fc_4level_tb.dat";
+
+
+        ------------------- 
+        variable steplength : real := t_sw * (duty);
+        variable high_time  : real := t_sw * (duty);
+        variable low_time   : real := t_sw * (1.0-duty);
 
     begin
         if rising_edge(simulator_clock) then
@@ -212,14 +219,23 @@ begin
             --         ,udc
             --     ));
 
-            rk5(realtime, lcr_rk5, get_step_length);
+            rk5(realtime, lcr_rk5, steplength);
+            realtime <= realtime + steplength;
 
-            realtime <= realtime + get_step_length;
+            steplength := get_step_length;
+
             prev_sw_state := sw_state;
             sw_state      := next_sw_state;
             next_sw_state := get_next_sw_state(sw_state, prev_sw_state);
 
         end if; -- rising_edge
     end process stimulus;	
+
+    control : process(simulator_clock) is
+    begin
+        if rising_edge(simulator_clock)
+        then 
+        end if;
+    end process;
 ------------------------------------------------------------------------
 end vunit_simulation;
