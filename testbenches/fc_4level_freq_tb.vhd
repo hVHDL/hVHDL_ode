@@ -114,7 +114,7 @@ begin
         variable i_load : real := -10.0;
         constant l      : real := 10.0e-6;
         constant c      : real := 10.0e-6;
-        constant rl     : real := 10.0e-3;
+        constant rl     : real := 100.0e-3;
         constant cfc    : real := 4.0e-6;
 
         variable sw_frequency : real := 500.0e3;
@@ -169,7 +169,7 @@ begin
         variable steplength : real := t_sw * (duty);
 
         variable pwm : bit := '1';
-        variable modulator_reference : real := 167.0;
+        variable modulator_reference : real := 0.0;
         variable fc_duty : real := 0.5;
 
         ---------------- end modulator variables ---------------------
@@ -245,12 +245,19 @@ begin
 
             if simulation_counter mod 1 = 0
             then
-                modulator_reference := 167.0 + rand;
+                modulator_reference := udc/3.0/2.0 + rand;
+                if realtime > 150.0e-3 then
+                    modulator_reference := udc/3.0/2.0 + udc/3.0 + rand;
+                end if;
+                if realtime > 250.0e-3 then
+                    modulator_reference := udc/3.0/2.0 + udc*2.0/3.0 + rand;
+                end if;
             end if;
 
             ------- modulator -----------
 
             --
+            level_bits := (others => '0');
             if modulator_reference >= udc*0.0/3.0 then level_bits(0) := '1'; end if;
             if modulator_reference >= udc*1.0/3.0 then level_bits(1) := '1'; end if;
             if modulator_reference >= udc*2.0/3.0 then level_bits(2) := '1'; end if;
@@ -258,13 +265,27 @@ begin
             ones_in_high_state := number_of_ones(level_bits);
             ones_in_low_state  := number_of_ones(level_bits)-1;
 
-            fc_duty    := get_fc_duty(modulator_reference, udc, level_bits);
-            steplength := get_next_step_length(t_sw, pwm, fc_duty);
+            -- check(ones_in_high_state = 1, "ones in high state " & integer'image(ones_in_high_state));
+            -- check(ones_in_low_state = 0, "ones in low state " & integer'image(ones_in_low_state));
 
-            prev_sw_state := sw_state; -- not needed at the moment
-            sw_state      := next_sw_state;
-
-            next_high_state := (others => '1');
+            case ones_in_high_state is
+                WHEN 3 => next_high_state := (others => '1');
+                WHEN 2 => 
+                    CASE next_high_state is
+                        WHEN "110"  => next_high_state := "101";
+                        WHEN "101"  => next_high_state := "011";
+                        WHEN "011"  => next_high_state := "110";
+                        WHEN others => next_high_state := "110";
+                    end CASE;
+                WHEN 1 => 
+                    CASE next_high_state is
+                        WHEN "100"  => next_high_state := "010";
+                        WHEN "010"  => next_high_state := "001";
+                        WHEN "001"  => next_high_state := "100";
+                        WHEN others => next_high_state := "100";
+                    end CASE;
+                WHEN others   => -- do nothing
+            end CASE;
 
             case ones_in_low_state is
                 WHEN 2 => 
@@ -272,21 +293,34 @@ begin
                         WHEN "110"  => next_low_state := "101";
                         WHEN "101"  => next_low_state := "011";
                         WHEN "011"  => next_low_state := "110";
-                        WHEN others =>
+                        WHEN others => next_low_state := "110";
                     end CASE;
+                WHEN 1 => 
+                    CASE next_low_state is
+                        WHEN "100"  => next_low_state := "010";
+                        WHEN "010"  => next_low_state := "001";
+                        WHEN "001"  => next_low_state := "100";
+                        WHEN others => next_low_state := "100";
+                    end CASE;
+                WHEN 0 => next_low_state := "000";
                 WHEN others   => -- do nothing
             end CASE;
 
             -- toggle between high and low pwm states
+
+            fc_duty    := get_fc_duty(modulator_reference, udc, level_bits);
+            steplength := get_next_step_length(t_sw*2.0, pwm, fc_duty);
+
             pwm := not pwm;
             if pwm = '1' then
                 next_sw_state := next_high_state;
             else
                 next_sw_state := next_low_state;
             end if;
+            prev_sw_state := sw_state; -- not needed at the moment
+            sw_state      := next_sw_state;
 
             -----------------------------
-
 
         end if; -- rising_edge
     end process stimulus;	
