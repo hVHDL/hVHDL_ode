@@ -196,6 +196,10 @@ begin
         end get_next_step_length;
         ---------------------------------------------------------------
 
+        variable level_bits : bit_vector(2 downto 0) := (others => '0');
+        variable ones_in_high_state : natural := 0;
+        variable ones_in_low_state : natural := 0;
+
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
@@ -243,18 +247,29 @@ begin
             ------- modulator -----------
             pwm := not pwm;
 
+            --
+            if modulator_reference >= udc*0.0/3.0 then level_bits(0) := '1'; end if;
+            if modulator_reference >= udc*1.0/3.0 then level_bits(1) := '1'; end if;
+            if modulator_reference >= udc*2.0/3.0 then level_bits(2) := '1'; end if;
+            --
+            ones_in_high_state := number_of_ones(level_bits);
+            ones_in_low_state  := number_of_ones(level_bits)-1;
+
             fc_duty    := get_fc_duty(modulator_reference, udc);
             steplength := get_next_step_length(t_sw, pwm, fc_duty);
 
             prev_sw_state := sw_state;
             sw_state      := next_sw_state;
 
+            -- ones_in_high_state
+            -- ones_in_low_state 
+
             case number_of_ones(sw_state) is
                 WHEN 3 => 
                     CASE prev_sw_state is
-                        WHEN "110" => next_sw_state := "101";
-                        WHEN "101" => next_sw_state := "011";
-                        WHEN "011" => next_sw_state := "110";
+                        WHEN "110"  => next_sw_state := "101";
+                        WHEN "101"  => next_sw_state := "011";
+                        WHEN "011"  => next_sw_state := "110";
                         WHEN others => next_sw_state := "111";
                     end CASE;
                 WHEN others   => next_sw_state := "111";
