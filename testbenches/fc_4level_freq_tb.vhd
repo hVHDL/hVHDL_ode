@@ -72,9 +72,11 @@ architecture vunit_simulation of fc_4level_freq_tb is
         return bridge_voltage;
 
     end get_fc_bridge_voltage;
+
     ----------
-    function get_fc_duty(vref : real; udc : real ; imax : natural := 2) return real is
+    function get_fc_duty(vref : real; udc : real ; level_bits : bit_vector) return real is
         variable retval : real := 0.0;
+        variable imax : natural := level_bits'high;
         constant fc_vdiv : real := udc/real(imax+1);
     begin
         retval := vref/fc_vdiv;
@@ -170,9 +172,6 @@ begin
         variable modulator_reference : real := 167.0;
         variable fc_duty : real := 0.5;
 
-        variable next_high_state : BIT_VECTOR(2 downto 0) := "111";
-        variable next_low_state  : BIT_VECTOR(2 downto 0) := "110";
-
         ---------------- end modulator variables ---------------------
         ---------------------------------------------------------------
         function get_next_step_length(t_sw : real; pwm : bit; duty : real) return real
@@ -199,6 +198,11 @@ begin
         variable level_bits : bit_vector(2 downto 0) := (others => '0');
         variable ones_in_high_state : natural := 0;
         variable ones_in_low_state : natural := 0;
+        variable next_high_state : sw_state'subtype := (others => '1');
+        variable next_low_state : sw_state'subtype := (0 => '0', others => '1');
+
+        variable prev_high_state : sw_state'subtype := (others => '1');
+        variable prev_low_state : sw_state'subtype := (0 => '0', others => '1');
 
     begin
         if rising_edge(simulator_clock) then
@@ -245,7 +249,6 @@ begin
             end if;
 
             ------- modulator -----------
-            pwm := not pwm;
 
             --
             if modulator_reference >= udc*0.0/3.0 then level_bits(0) := '1'; end if;
@@ -255,25 +258,32 @@ begin
             ones_in_high_state := number_of_ones(level_bits);
             ones_in_low_state  := number_of_ones(level_bits)-1;
 
-            fc_duty    := get_fc_duty(modulator_reference, udc);
+            fc_duty    := get_fc_duty(modulator_reference, udc, level_bits);
             steplength := get_next_step_length(t_sw, pwm, fc_duty);
 
-            prev_sw_state := sw_state;
+            prev_sw_state := sw_state; -- not needed at the moment
             sw_state      := next_sw_state;
 
-            -- ones_in_high_state
-            -- ones_in_low_state 
+            next_high_state := (others => '1');
 
-            case number_of_ones(sw_state) is
-                WHEN 3 => 
-                    CASE prev_sw_state is
-                        WHEN "110"  => next_sw_state := "101";
-                        WHEN "101"  => next_sw_state := "011";
-                        WHEN "011"  => next_sw_state := "110";
-                        WHEN others => next_sw_state := "111";
+            case ones_in_low_state is
+                WHEN 2 => 
+                    CASE next_low_state is
+                        WHEN "110"  => next_low_state := "101";
+                        WHEN "101"  => next_low_state := "011";
+                        WHEN "011"  => next_low_state := "110";
+                        WHEN others =>
                     end CASE;
-                WHEN others   => next_sw_state := "111";
+                WHEN others   => -- do nothing
             end CASE;
+
+            -- toggle between high and low pwm states
+            pwm := not pwm;
+            if pwm = '1' then
+                next_sw_state := next_high_state;
+            else
+                next_sw_state := next_low_state;
+            end if;
 
             -----------------------------
 
