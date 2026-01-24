@@ -45,6 +45,51 @@ architecture vunit_simulation of fc_4level_freq_tb is
         return retval;
     end fc_modulator;
     ----------------------
+    function number_of_ones(vector : bit_vector) return natural is
+        variable retval : natural := 0;
+    begin
+        for i in vector'range loop
+            if vector(i) = '1'
+            then
+                retval := retval + 1;
+            end if;
+        end loop;
+        return retval;
+    end number_of_ones;
+    ----------
+
+    subtype sw_states is bit_vector(2 downto 0);
+    ----------
+    function get_fc_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
+        variable bridge_voltage : real := 0.0;
+    begin
+
+        for i in ufc'range loop
+            bridge_voltage := bridge_voltage + fc_modulator(sw_state(i+1 downto i)) * ufc(i);
+        end loop;
+        bridge_voltage := bridge_voltage + fc_modulator('0' & sw_state(sw_state'high)) * udc;
+
+        return bridge_voltage;
+
+    end get_fc_bridge_voltage;
+    ----------
+    function get_fc_duty(vref : real; udc : real ; imax : natural := 2) return real is
+        variable retval : real := 0.0;
+        constant fc_vdiv : real := udc/real(imax+1);
+    begin
+        retval := vref/fc_vdiv;
+
+        -- find voltage level of vref
+        for i in 1 to imax loop
+            if vref > real(i)*fc_vdiv
+            then
+                retval := (vref - real(i)*fc_vdiv)/(fc_vdiv);
+            end if;
+        end loop;
+
+        return retval;
+
+    end get_fc_duty;
 
 
 begin
@@ -78,71 +123,15 @@ begin
         variable rand : real;
 
         -- i_l, uc, ufc
-        constant init_state_vector : real_vector := (0 => 0.0, 1 => 150.0,  2 => 66.0, 3 => 132.0);
-
-        subtype sw_states is bit_vector(2 downto 0);
+        constant init_state_vector : real_vector := (
+              0 => 0.0
+            , 1 => 150.0
+            , 2 => 66.0    -- fc1
+            , 3 => 132.0); -- fc2
 
         variable sw_state      : sw_states := "111";
         variable next_sw_state : sw_states := "110";
         variable prev_sw_state : sw_states := "101";
-
-        ----------
-        function number_of_ones(vector : bit_vector) return natural is
-            variable retval : natural := 0;
-        begin
-            for i in vector'range loop
-                if vector(i) = '1'
-                then
-                    retval := retval + 1;
-                end if;
-            end loop;
-            return retval;
-        end number_of_ones;
-        ----------
-        function get_next_sw_state(sw_state : sw_states; prev_state : sw_states) return sw_states is
-            variable next_sw_state : sw_states;
-        begin
-
-            case number_of_ones(sw_state) is
-                WHEN 3 => 
-                    CASE prev_state is
-                        WHEN "110" => next_sw_state := "101";
-                        WHEN "101" => next_sw_state := "011";
-                        WHEN "011" => next_sw_state := "110";
-                        WHEN others => next_sw_state := "111";
-                    end CASE;
-                WHEN others   => next_sw_state := "111";
-            end CASE;
-
-            return next_sw_state;
-        end get_next_sw_state;
-
-        ----------
-        impure function get_step_length return real is
-            variable step_length : real := 1.0e-9;
-        begin
-
-            case sw_state is
-                WHEN "111"  => step_length := t_sw * (duty);
-                WHEN others => step_length := t_sw * (1.0-duty);
-            end CASE;
-
-            return step_length;
-
-        end get_step_length;
-        ----------
-        function get_fc_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
-            variable bridge_voltage : real := 0.0;
-        begin
-
-            for i in ufc'range loop
-                bridge_voltage := bridge_voltage + fc_modulator(sw_state(i+1 downto i)) * ufc(i);
-            end loop;
-            bridge_voltage := bridge_voltage + fc_modulator('0' & sw_state(sw_state'high)) * udc;
-
-            return bridge_voltage;
-
-        end get_fc_bridge_voltage;
 
         ----------
         impure function deriv_lcr(t : real; states : real_vector) return real_vector is
@@ -169,7 +158,6 @@ begin
 
         variable lcr_rk5 : init_state_vector'subtype := init_state_vector;
 
-
         file file_handler : text open write_mode is "fc_4level_tb.dat";
 
         ------------------- modulator variables ----------------------
@@ -186,24 +174,6 @@ begin
         variable next_low_state  : BIT_VECTOR(2 downto 0) := "110";
 
         ---------------- end modulator variables ---------------------
-        function get_fc_duty(vref : real; udc : real) return real is
-            variable retval : real := 0.0;
-        begin
-            retval := (vref - udc*0.0/3.0)/(udc*1.0/3.0);
-
-            if vref > udc*1.0/3.0
-            then
-                retval := (vref - udc*1.0/3.0)/(udc*1.0/3.0);
-            end if;
-
-            if vref > udc*2.0/3.0
-            then
-                retval := (vref - udc*2.0/3.0)/(udc*1.0/3.0);
-            end if;
-
-            return retval;
-
-        end get_fc_duty;
         ---------------------------------------------------------------
         function get_next_step_length(t_sw : real; pwm : bit; duty : real) return real
         is
@@ -224,7 +194,7 @@ begin
             return retval;
 
         end get_next_step_length;
-
+        ---------------------------------------------------------------
 
     begin
         if rising_edge(simulator_clock) then
@@ -273,12 +243,22 @@ begin
             ------- modulator -----------
             pwm := not pwm;
 
-            fc_duty := get_fc_duty(modulator_reference, udc);
+            fc_duty    := get_fc_duty(modulator_reference, udc);
             steplength := get_next_step_length(t_sw, pwm, fc_duty);
 
             prev_sw_state := sw_state;
             sw_state      := next_sw_state;
-            next_sw_state := get_next_sw_state(sw_state, prev_sw_state);
+
+            case number_of_ones(sw_state) is
+                WHEN 3 => 
+                    CASE prev_sw_state is
+                        WHEN "110" => next_sw_state := "101";
+                        WHEN "101" => next_sw_state := "011";
+                        WHEN "011" => next_sw_state := "110";
+                        WHEN others => next_sw_state := "111";
+                    end CASE;
+                WHEN others   => next_sw_state := "111";
+            end CASE;
 
             -----------------------------
 
