@@ -172,14 +172,59 @@ begin
 
         file file_handler : text open write_mode is "fc_4level_tb.dat";
 
-
-        ------------------- 
-        variable steplength : real := t_sw * (duty);
+        ------------------- modulator variables ----------------------
         variable high_time  : real := t_sw * (duty);
         variable low_time   : real := t_sw * (1.0-duty);
+
+        variable steplength : real := t_sw * (duty);
+
         variable pwm : bit := '1';
         variable modulator_reference : real := 167.0;
         variable fc_duty : real := 0.5;
+
+        variable next_high_state : BIT_VECTOR(2 downto 0) := "111";
+        variable next_low_state  : BIT_VECTOR(2 downto 0) := "110";
+
+        ---------------- end modulator variables ---------------------
+        function get_fc_duty(vref : real; udc : real) return real is
+            variable retval : real := 0.0;
+        begin
+            retval := (vref - udc*0.0/3.0)/(udc*1.0/3.0);
+
+            if vref > udc*1.0/3.0
+            then
+                retval := (vref - udc*1.0/3.0)/(udc*1.0/3.0);
+            end if;
+
+            if vref > udc*2.0/3.0
+            then
+                retval := (vref - udc*2.0/3.0)/(udc*1.0/3.0);
+            end if;
+
+            return retval;
+
+        end get_fc_duty;
+        ---------------------------------------------------------------
+        function get_next_step_length(t_sw : real; pwm : bit; duty : real) return real
+        is
+            variable retval : real := 1.0e-9;
+            variable high_time : real := 1.0e-9;
+            variable low_time : real := 1.0e-9;
+        begin
+            high_time := t_sw * duty;
+            low_time  := t_sw * (1.0-duty);
+
+            if pwm = '1'
+            then
+                retval := high_time;
+            else
+                retval := low_time;
+            end if;
+
+            return retval;
+
+        end get_next_step_length;
+
 
     begin
         if rising_edge(simulator_clock) then
@@ -226,28 +271,10 @@ begin
             end if;
 
             ------- modulator -----------
-            fc_duty   := (modulator_reference - udc*0.0/3.0)/(udc*1.0/3.0);
-
-            if modulator_reference > udc*1.0/3.0
-            then
-                fc_duty := (modulator_reference - udc*1.0/3.0)/(udc*1.0/3.0);
-            end if;
-
-            if modulator_reference > udc*2.0/3.0
-            then
-                fc_duty := (modulator_reference - udc*2.0/3.0)/(udc*1.0/3.0);
-            end if;
-
-            high_time := t_sw * fc_duty;
-            low_time  := t_sw * (1.0-fc_duty);
-
             pwm := not pwm;
-            if pwm = '1'
-            then
-                steplength := high_time;
-            else
-                steplength := low_time;
-            end if;
+
+            fc_duty := get_fc_duty(modulator_reference, udc);
+            steplength := get_next_step_length(t_sw, pwm, fc_duty);
 
             prev_sw_state := sw_state;
             sw_state      := next_sw_state;

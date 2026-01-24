@@ -10,7 +10,7 @@ def plot_data(filenames):
     for filename in filenames:
         try:
             # Load the data file into a DataFrame
-            df = pd.read_csv(filename, delim_whitespace=True)
+            df = pd.read_csv(filename, sep='\s+')
             
             # Check if 'time' column is present
             if 'time' not in df.columns:
