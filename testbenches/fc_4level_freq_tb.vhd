@@ -114,10 +114,10 @@ begin
         variable i_load : real := -10.0;
         constant l      : real := 10.0e-6;
         constant c      : real := 10.0e-6;
-        constant rl     : real := 100.0e-3;
+        constant rl     : real := 50.0e-3;
         constant cfc    : real := 4.0e-6;
 
-        variable sw_frequency : real := 500.0e3;
+        variable sw_frequency : real := 1000.0e3;
         variable t_sw : real := 1.0/sw_frequency;
         variable duty : real := 0.5;
 
@@ -148,7 +148,7 @@ begin
             bridge_voltage :=  get_fc_bridge_voltage(sw_state, udc, (ufc1, ufc2));
 
             retval(0) := (bridge_voltage - il * rl - uc) * (1.0/l);
-            retval(1) := (il ) * (1.0/c);
+            retval(1) := (il - 10.0) * (1.0/c);
             retval(2) := -fc_modulator(sw_state(1 downto 0)) * il / cfc;
             retval(3) := -fc_modulator(sw_state(2 downto 1)) * il / cfc;
 
@@ -204,11 +204,11 @@ begin
         variable prev_high_state : sw_state'subtype := (others => '1');
         variable prev_low_state : sw_state'subtype := (0 => '0', others => '1');
 
-        type sw_vector is array (natural range <>) of sw_state'subtype;
+        type sw_vector is array (natural range <>) of bit_vector;
         type sw_matrix is array (natural range <>) of sw_vector;
 
         variable state_index : natural range 0 to 5 := 0;
-        constant fc_4_sw_matrix : sw_matrix(0 to 2)(0 to 5) := (
+        constant fc_4_sw_matrix : sw_matrix(0 to 2)(0 to 5)(0 to 2) := (
             0 =>(
                 "001",
                 "000",
@@ -217,19 +217,26 @@ begin
                 "100",
                 "000"),
             1 =>(
-                "110",
-                "100",
-                "101",
-                "001",
-                "011",
-                "010"),
+                "011", --110 101 011
+                "010", --100 100 001
+                "110", --101 110 101
+                "100", --001 010 100
+                "101", --011 011 110
+                "001"),--010 001 010
             2 =>(
                 "111",
-                "110",
-                "111",
                 "101",
                 "111",
+                "110",
+                "111",
                 "011"));
+        variable avg_current : real := 10.0;
+        variable avg_current_diff : real := 10.0;
+        variable prev_current : real := 10.0;
+        variable prev_avg_current : real := 10.0;
+        variable voltage_offset : real := 66.666/2.0;
+
+        variable sw_integ : real_vector(0 to 5) := (others => 0.0);
 
     begin
         if rising_edge(simulator_clock) then
@@ -237,6 +244,9 @@ begin
             if simulation_counter = 0 then
                 init_simfile(file_handler, ("time"
                 ,"T_i0"
+                ,"T_i1"
+                ,"T_i2"
+                ,"T_i3"
                 ,"B_u0"
                 ,"B_u1"
                 ,"B_u2"
@@ -247,12 +257,20 @@ begin
             -------------------------
 
             write_to(file_handler,(realtime
-                    ,lcr_rk5(0)          -- ,"T_i0"
+                    -- ,lcr_rk5(0)          -- ,"T_i0"
+                    -- ,avg_current_diff
+                    ,sw_integ(0)
+                    ,sw_integ(1)
+                    ,lcr_rk5(2)-66.666         -- ,"B_u1"
+                    ,lcr_rk5(3)-66.666*2.0         -- ,"B_u2"
                     ,lcr_rk5(1)          -- ,"B_u0"
                     ,lcr_rk5(2)          -- ,"B_u1"
                     ,lcr_rk5(3)          -- ,"B_u2"
                     ,udc                 -- ,"B_u3"
                     ,modulator_reference -- ,"B_u4"
+                    -- ,sw_integ(2)
+                    -- ,sw_integ(3)
+                    -- ,sw_integ(4)
                 ));
 
             -- write_to(file_handler,(realtime
@@ -272,12 +290,12 @@ begin
 
             if simulation_counter mod 1 = 0
             then
-                modulator_reference := udc/3.0/2.0 + rand;
+                modulator_reference := voltage_offset + rand;
                 if realtime > 150.0e-3 then
-                    modulator_reference := udc/3.0/2.0 + udc/3.0 + rand;
+                    modulator_reference := voltage_offset + udc/3.0 + rand;
                 end if;
                 if realtime > 250.0e-3 then
-                    modulator_reference := udc/3.0/2.0 + udc*2.0/3.0 + rand;
+                    modulator_reference := voltage_offset + udc*2.0/3.0 + rand;
                 end if;
             end if;
 
@@ -295,6 +313,31 @@ begin
             -- check(ones_in_high_state = 1, "ones in high state " & integer'image(ones_in_high_state));
             -- check(ones_in_low_state = 0, "ones in low state " & integer'image(ones_in_low_state));
 
+
+
+            avg_current := (lcr_rk5(0) - prev_current)/2.0;
+            avg_current_diff := (avg_current - prev_avg_current);
+            prev_avg_current := avg_current;
+            -- sw_integ(state_index) :=sw_integ(state_index) + avg_current;
+            prev_current := lcr_rk5(0);
+
+            CASE sw_state(2 downto 1) is
+                WHEN "01" => sw_integ(1) := sw_integ(1) - sw_integ(1)*55.0e-3 + avg_current_diff;
+                WHEN "10" => sw_integ(1) := sw_integ(1) - sw_integ(1)*55.0e-3 - avg_current_diff;
+                WHEN others => 
+            end CASE;
+            CASE sw_state(1 downto 0) is
+                WHEN "01" => sw_integ(0) := sw_integ(0) - sw_integ(0)*55.0e-3 + avg_current_diff;
+                WHEN "10" => sw_integ(0) := sw_integ(0) - sw_integ(0)*55.0e-3 - avg_current_diff;
+                WHEN others => 
+            end CASE;
+
+            if state_index mod 2 = 0 then
+                pwm := '1';
+            else
+                pwm := '0';
+            end if;
+
             next_sw_state := fc_4_sw_matrix(ones_in_low_state)(state_index);
             if state_index < 5 then
                 state_index := state_index + 1;
@@ -304,12 +347,6 @@ begin
 
             fc_duty    := get_fc_duty(modulator_reference, udc, level_bits);
             steplength := get_next_step_length(t_sw*2.0, pwm, fc_duty);
-
-            if state_index mod 2 = 0 then
-                pwm := '1';
-            else
-                pwm := '0';
-            end if;
             prev_sw_state := sw_state; -- not needed at the moment
             sw_state      := next_sw_state;
 
