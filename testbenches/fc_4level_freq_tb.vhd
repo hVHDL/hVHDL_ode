@@ -204,6 +204,33 @@ begin
         variable prev_high_state : sw_state'subtype := (others => '1');
         variable prev_low_state : sw_state'subtype := (0 => '0', others => '1');
 
+        type sw_vector is array (natural range <>) of sw_state'subtype;
+        type sw_matrix is array (natural range <>) of sw_vector;
+
+        variable state_index : natural range 0 to 5 := 0;
+        constant fc_4_sw_matrix : sw_matrix(0 to 2)(0 to 5) := (
+            0 =>(
+                "001",
+                "000",
+                "010",
+                "000",
+                "100",
+                "000"),
+            1 =>(
+                "110",
+                "100",
+                "101",
+                "001",
+                "011",
+                "010"),
+            2 =>(
+                "111",
+                "110",
+                "111",
+                "101",
+                "111",
+                "011"));
+
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
@@ -268,54 +295,20 @@ begin
             -- check(ones_in_high_state = 1, "ones in high state " & integer'image(ones_in_high_state));
             -- check(ones_in_low_state = 0, "ones in low state " & integer'image(ones_in_low_state));
 
-            case ones_in_high_state is
-                WHEN 3 => next_high_state := (others => '1');
-                WHEN 2 => 
-                    CASE next_high_state is
-                        WHEN "110"  => next_high_state := "101";
-                        WHEN "101"  => next_high_state := "011";
-                        WHEN "011"  => next_high_state := "110";
-                        WHEN others => next_high_state := "110";
-                    end CASE;
-                WHEN 1 => 
-                    CASE next_high_state is
-                        WHEN "100"  => next_high_state := "010";
-                        WHEN "010"  => next_high_state := "001";
-                        WHEN "001"  => next_high_state := "100";
-                        WHEN others => next_high_state := "100";
-                    end CASE;
-                WHEN others   => -- do nothing
-            end CASE;
-
-            case ones_in_low_state is
-                WHEN 2 => 
-                    CASE next_low_state is
-                        WHEN "110"  => next_low_state := "101";
-                        WHEN "101"  => next_low_state := "011";
-                        WHEN "011"  => next_low_state := "110";
-                        WHEN others => next_low_state := "110";
-                    end CASE;
-                WHEN 1 => 
-                    CASE next_low_state is
-                        WHEN "100"  => next_low_state := "010";
-                        WHEN "010"  => next_low_state := "001";
-                        WHEN "001"  => next_low_state := "100";
-                        WHEN others => next_low_state := "100";
-                    end CASE;
-                WHEN 0 => next_low_state := "000";
-                WHEN others   => -- do nothing
-            end CASE;
-
-            -- toggle between high and low pwm states
+            next_sw_state := fc_4_sw_matrix(ones_in_low_state)(state_index);
+            if state_index < 5 then
+                state_index := state_index + 1;
+            else
+                state_index := 0;
+            end if;
 
             fc_duty    := get_fc_duty(modulator_reference, udc, level_bits);
             steplength := get_next_step_length(t_sw*2.0, pwm, fc_duty);
 
-            pwm := not pwm;
-            if pwm = '1' then
-                next_sw_state := next_high_state;
+            if state_index mod 2 = 0 then
+                pwm := '1';
             else
-                next_sw_state := next_low_state;
+                pwm := '0';
             end if;
             prev_sw_state := sw_state; -- not needed at the moment
             sw_state      := next_sw_state;
