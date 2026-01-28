@@ -245,7 +245,7 @@ begin
         variable avg_current_diff : real := 10.0;
         variable prev_current : real := 10.0;
         variable prev_avg_current : real := 10.0;
-        variable voltage_offset : real := 66.666/2.0;
+        variable voltage_offset : real := 200.0/4.0/2.0;
 
         variable sw_integ : real_vector(0 to 7) := (others => 0.0);
 
@@ -258,6 +258,8 @@ begin
                 ,"T_i1"
                 ,"T_i2"
                 ,"T_i3"
+                ,"T_i4"
+                ,"T_i4"
                 ,"B_u0"
                 ,"B_u1"
                 ,"B_u2"
@@ -270,14 +272,18 @@ begin
             write_to(file_handler,(realtime
                     -- ,lcr_rk5(0)          -- ,"T_i0"
                     -- ,avg_current_diff
-                    ,sw_integ(0) + udc/3.0    
-                    ,sw_integ(1) + udc*2.0/3.0
+                    -- ,sw_integ(0) + udc/3.0    
+                    -- ,sw_integ(1) + udc*2.0/3.0
                     ,lcr_rk5(2) -- ,"B_u1"
+                    ,lcr_rk5(3) -- ,"B_u1"
+                    ,lcr_rk5(4)          -- ,"B_u2"
+                    ,udc
+                    ,modulator_reference -- ,"B_u4"
+                    ,lcr_rk5(1)          -- ,"B_u0"
                     ,lcr_rk5(3)          -- ,"B_u2"
                     ,lcr_rk5(1)          -- ,"B_u0"
                     ,lcr_rk5(2)          -- ,"B_u1"
                     ,lcr_rk5(3)          -- ,"B_u2"
-                    ,udc                 -- ,"B_u3"
                     ,modulator_reference -- ,"B_u4"
                     -- ,sw_integ(2)
                     -- ,sw_integ(3)
@@ -301,12 +307,15 @@ begin
 
             if simulation_counter mod 1 = 0
             then
-                modulator_reference := voltage_offset + rand;
+                modulator_reference := 40.0;
                 if realtime > 150.0e-3 then
-                    modulator_reference := 66.6666;
+                    modulator_reference := 90.0;
                 end if;
                 if realtime > 250.0e-3 then
-                    modulator_reference := 140.9999;
+                    modulator_reference := 140.0;
+                end if;
+                if realtime > 350.0e-3 then
+                    modulator_reference := 190.0;
                 end if;
             end if;
 
@@ -347,8 +356,8 @@ begin
                 WHEN others => 
             end CASE;
 
-            if realtime > 100.0e-3 then udc := 150.0; end if;
-            if realtime > 300.0e-3 then udc := 300.0; end if;
+            -- if realtime > 100.0e-3 then udc := 150.0; end if;
+            -- if realtime > 300.0e-3 then udc := 300.0; end if;
 
             if state_index mod 2 = 0 then
                 pwm := '1';
@@ -368,10 +377,10 @@ begin
             prev_sw_state := sw_state; -- not needed at the moment
             sw_state      := next_sw_state;
 
-            if realtime < 400.0e-3 and realtime + steplength >= 400.0e-3
-            then
-                lcr_rk5(1) := lcr_rk5(1) - 50.0;
-            end if;
+            -- if realtime < 400.0e-3 and realtime + steplength >= 400.0e-3
+            -- then
+            --     lcr_rk5(1) := lcr_rk5(1) - 50.0;
+            -- end if;
 
             -----------------------------
 
