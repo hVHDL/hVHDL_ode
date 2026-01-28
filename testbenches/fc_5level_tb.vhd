@@ -12,11 +12,11 @@ context vunit_lib.vunit_context;
     use ode.write_pkg.all;
     use ode.ode_pkg.all;
 
-entity fc_4level_freq_tb is
+entity fc_5level_tb is
   generic (runner_cfg : string);
 end;
 
-architecture vunit_simulation of fc_4level_freq_tb is
+architecture vunit_simulation of fc_5level_tb is
 
     constant clock_period : time := 1 ns;
     
@@ -58,7 +58,7 @@ architecture vunit_simulation of fc_4level_freq_tb is
     end number_of_ones;
     ----------
 
-    subtype sw_states is bit_vector(2 downto 0);
+    subtype sw_states is bit_vector(3 downto 0);
     ----------
     function get_fc_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
         variable bridge_voltage : real := 0.0;
@@ -110,7 +110,8 @@ begin
 
     stimulus : process(simulator_clock)
 
-        variable udc    : real := 200.0;
+        constant initial_dc_link : real := 200.0;
+        variable udc    : real := initial_dc_link;
         variable i_load : real := -10.0;
         constant l      : real := 10.0e-6;
         constant c      : real := 10.0e-6;
@@ -128,12 +129,13 @@ begin
         constant init_state_vector : real_vector := (
               0 => 0.0
             , 1 => 150.0
-            , 2 => 66.0    -- fc1
-            , 3 => 132.0); -- fc2
+            , 2 => initial_dc_link*1.0/4.0   -- fc1
+            , 3 => initial_dc_link*2.0/4.0   -- fc2
+            , 4 => initial_dc_link*3.0/4.0); -- fc3
 
-        variable sw_state      : sw_states := "111";
-        variable next_sw_state : sw_states := "110";
-        variable prev_sw_state : sw_states := "101";
+        variable sw_state      : sw_states := "1111";
+        variable next_sw_state : sw_states := "1110";
+        variable prev_sw_state : sw_states := "1111";
 
         ----------
         impure function deriv_lcr(t : real; states : real_vector) return real_vector is
@@ -143,14 +145,16 @@ begin
             alias uc is states(1);
             alias ufc1 is states(2);
             alias ufc2 is states(3);
+            alias ufc3 is states(4);
         begin
 
-            bridge_voltage :=  get_fc_bridge_voltage(sw_state, udc, (ufc1, ufc2));
+            bridge_voltage :=  get_fc_bridge_voltage(sw_state, udc, (ufc1, ufc2, ufc3));
 
             retval(0) := (bridge_voltage - il * rl - uc) * (1.0/l);
             retval(1) := (il - i_load) * (1.0/c);
             retval(2) := -fc_modulator(sw_state(1 downto 0)) * il / cfc;
             retval(3) := -fc_modulator(sw_state(2 downto 1)) * il / cfc;
+            retval(4) := -fc_modulator(sw_state(3 downto 2)) * il / cfc;
 
             return retval;
 
@@ -160,7 +164,7 @@ begin
 
         variable lcr_rk5 : init_state_vector'subtype := init_state_vector;
 
-        file file_handler : text open write_mode is "fc_4level_tb.dat";
+        file file_handler : text open write_mode is "fc_5level_tb.dat";
 
         ------------------- modulator variables ----------------------
         variable steplength : real := t_sw * (duty);
@@ -192,43 +196,58 @@ begin
         end get_next_step_length;
         ---------------------------------------------------------------
 
-        variable level_bits : bit_vector(2 downto 0) := (others => '0');
+        variable level_bits : bit_vector(3 downto 0) := (others => '0');
         variable ones_in_high_state : natural := 0;
         variable ones_in_low_state : natural := 0;
 
         type sw_vector is array (natural range <>) of bit_vector;
         type sw_matrix is array (natural range <>) of sw_vector;
 
-        variable state_index : natural range 0 to 5 := 0;
-        constant fc_4_sw_matrix : sw_matrix(0 to 2)(0 to 5)(0 to 2) := (
+        variable state_index : natural range 0 to 7 := 0;
+        constant fc_5_sw_matrix : sw_matrix(0 to 3)(0 to 7)(0 to 3) := (
             0 =>(
-                "001",
-                "000",
-                "010",
-                "000",
-                "100",
-                "000"),
+                "0001",
+                "0000",
+                "0010",
+                "0000",
+                "0100",
+                "0000",
+                "1000",
+                "0000"),
             1 =>(
-                "011", --110 101 011
-                "010", --100 100 001
-                "110", --101 110 101
-                "100", --001 010 100
-                "101", --011 011 110
-                "001"),--010 001 010
+                "1001", -- "1001"
+                "1000", -- "1000"
+                "1100", -- "1100"
+                "0100", -- "0100"
+                "0110", -- "0110"
+                "0010", -- "0010"
+                "0011", -- "0011"
+                "0001"),-- "0001"
             2 =>(
-                "111",
-                "101",
-                "111",
-                "110",
-                "111",
-                "011"));
+                "0111", -- "0111"
+                "0011", -- "0011"
+                "1011", -- "1011"
+                "1001", -- "1001"
+                "1101", -- "1101"
+                "1100", -- "1100"
+                "1110", -- "1110"
+                "0110"),-- "0110"
+            3 =>(
+                "1111",
+                "1110",
+                "1111",
+                "1101",
+                "1111",
+                "1011",
+                "1111",
+                "0111"));
         variable avg_current : real := 10.0;
         variable avg_current_diff : real := 10.0;
         variable prev_current : real := 10.0;
         variable prev_avg_current : real := 10.0;
         variable voltage_offset : real := 66.666/2.0;
 
-        variable sw_integ : real_vector(0 to 5) := (others => 0.0);
+        variable sw_integ : real_vector(0 to 7) := (others => 0.0);
 
     begin
         if rising_edge(simulator_clock) then
@@ -295,9 +314,10 @@ begin
 
             --
             level_bits := (others => '0');
-            if modulator_reference >= udc*0.0/3.0 then level_bits(0) := '1'; end if;
-            if modulator_reference >= udc*1.0/3.0 then level_bits(1) := '1'; end if;
-            if modulator_reference >= udc*2.0/3.0 then level_bits(2) := '1'; end if;
+            if modulator_reference >= udc*0.0/4.0 then level_bits(0) := '1'; end if;
+            if modulator_reference >= udc*1.0/4.0 then level_bits(1) := '1'; end if;
+            if modulator_reference >= udc*2.0/4.0 then level_bits(2) := '1'; end if;
+            if modulator_reference >= udc*3.0/4.0 then level_bits(3) := '1'; end if;
             --
             ones_in_high_state := number_of_ones(level_bits);
             ones_in_low_state  := number_of_ones(level_bits)-1;
@@ -311,6 +331,11 @@ begin
             -- sw_integ(state_index) :=sw_integ(state_index) + avg_current;
             prev_current := lcr_rk5(0);
 
+            CASE sw_state(3 downto 2) is
+                WHEN "01" => sw_integ(2) := sw_integ(2) - sw_integ(2)*80.0e-3 + avg_current_diff;
+                WHEN "10" => sw_integ(2) := sw_integ(2) - sw_integ(2)*80.0e-3 - avg_current_diff;
+                WHEN others => 
+            end CASE;
             CASE sw_state(2 downto 1) is
                 WHEN "01" => sw_integ(1) := sw_integ(1) - sw_integ(1)*80.0e-3 + avg_current_diff;
                 WHEN "10" => sw_integ(1) := sw_integ(1) - sw_integ(1)*80.0e-3 - avg_current_diff;
@@ -331,8 +356,8 @@ begin
                 pwm := '0';
             end if;
 
-            next_sw_state := fc_4_sw_matrix(ones_in_low_state)(state_index);
-            if state_index < 5 then
+            next_sw_state := fc_5_sw_matrix(ones_in_low_state)(state_index);
+            if state_index < 7 then
                 state_index := state_index + 1;
             else
                 state_index := 0;
