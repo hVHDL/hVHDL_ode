@@ -26,7 +26,7 @@ architecture vunit_simulation of fc_5level_tb is
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant stoptime : real := 500.0e-3;
+    constant stoptime : real := 10000.0e-3;
 
     ----------------------
     function fc_modulator
@@ -112,13 +112,13 @@ begin
 
         constant initial_dc_link : real := 200.0;
         variable udc    : real := initial_dc_link;
-        variable i_load : real := -10.0;
-        constant l      : real := 10.0e-6;
+        variable i_load : real := 10.0;
+        constant l      : real := 20.0e-6;
         constant c      : real := 10.0e-6;
-        constant rl     : real := 50.0e-3;
+        constant rl     : real := 100.0e-3;
         constant cfc    : real := 4.0e-6;
 
-        variable sw_frequency : real := 1000.0e3;
+        variable sw_frequency : real := 500.0e3;
         variable t_sw : real := 1.0/sw_frequency;
         variable duty : real := 0.5;
 
@@ -128,12 +128,12 @@ begin
         -- i_l, uc, ufc
         constant init_state_vector : real_vector := (
               0 => 0.0
-            , 1 => 150.0
+            , 1 => 0.0 -- udc
             , 2 => initial_dc_link*1.0/4.0   -- fc1
             , 3 => initial_dc_link*2.0/4.0   -- fc2
             , 4 => initial_dc_link*3.0/4.0); -- fc3
 
-        variable sw_state      : sw_states := "1111";
+        variable sw_state      : sw_states := "0001";
         variable next_sw_state : sw_states := "1110";
         variable prev_sw_state : sw_states := "1111";
 
@@ -208,21 +208,21 @@ begin
             0 =>(
                 "0001",
                 "0000",
-                "0010",
-                "0000",
                 "0100",
+                "0000",
+                "0010",
                 "0000",
                 "1000",
                 "0000"),
             1 =>(
-                "1001", -- "1001"
-                "1000", -- "1000"
-                "1100", -- "1100"
-                "0100", -- "0100"
-                "0110", -- "0110"
-                "0010", -- "0010"
-                "0011", -- "0011"
-                "0001"),-- "0001"
+                "1100",  --0011 "0011",  -- c2      | c2
+                "0100",  --0010 "0001",  -- c1      | c2+c1
+                "0110",  --0110 "1001",  -- 1-c3+c1 | -c3+c2+2c1
+                "0010",  --0100 "1000",  -- 1-c3    | -2c3+c2+2c1
+                "0011",  --1100 "1100",  -- 1-c2    | -2c3+2c1
+                "0001",  --1000 "0100",  -- c3-c2   | -c3-c2+2c1
+                "1001",  --1001 "0110",  -- c3-c1   | -c2+c1
+                "1000"), --0001 "0010"), -- c2-c1   | 0
             2 =>(
                 "0111", -- "0111"
                 "0011", -- "0011"
@@ -259,12 +259,12 @@ begin
                 ,"T_i2"
                 ,"T_i3"
                 ,"T_i4"
-                ,"T_i4"
+                ,"T_i5"
                 ,"B_u0"
-                ,"B_u1"
-                ,"B_u2"
-                ,"B_u3"
-                ,"B_u4"
+                -- ,"B_u1"
+                -- ,"B_u2"
+                -- ,"B_u3"
+                -- ,"B_u4"
                 ));
             end if;
             -------------------------
@@ -280,24 +280,16 @@ begin
                     ,udc
                     ,modulator_reference -- ,"B_u4"
                     ,lcr_rk5(1)          -- ,"B_u0"
-                    ,lcr_rk5(3)          -- ,"B_u2"
-                    ,lcr_rk5(1)          -- ,"B_u0"
-                    ,lcr_rk5(2)          -- ,"B_u1"
-                    ,lcr_rk5(3)          -- ,"B_u2"
-                    ,modulator_reference -- ,"B_u4"
+                    ,get_fc_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3), 2 => lcr_rk5(4)))
+                    -- ,lcr_rk5(3)          -- ,"B_u2"
+                    -- ,lcr_rk5(1)          -- ,"B_u0"
+                    -- ,lcr_rk5(2)          -- ,"B_u1"
+                    -- ,lcr_rk5(3)          -- ,"B_u2"
+                    -- ,modulator_reference -- ,"B_u4"
                     -- ,sw_integ(2)
                     -- ,sw_integ(3)
                     -- ,sw_integ(4)
                 ));
-
-            -- write_to(file_handler,(realtime
-            --         ,lcr_rk5(0) 
-            --         -- ,get_fc_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3)))
-            --         ,lcr_rk5(1) 
-            --         ,lcr_rk5(2) 
-            --         ,lcr_rk5(3) 
-            --         ,udc
-            --     ));
 
             rk5(realtime, lcr_rk5, steplength);
             realtime <= realtime + steplength;
@@ -305,19 +297,16 @@ begin
             uniform(seed1, seed2, rand);
             rand := ((rand - 0.5) * 2.0) * 1.0;
 
-            if simulation_counter mod 1 = 0
-            then
-                modulator_reference := 40.0;
-                if realtime > 150.0e-3 then
-                    modulator_reference := 90.0;
-                end if;
-                if realtime > 250.0e-3 then
-                    modulator_reference := 140.0;
-                end if;
-                if realtime > 350.0e-3 then
-                    modulator_reference := 190.0;
-                end if;
-            end if;
+                -- modulator_reference := 40.0;
+                -- if realtime > 150.0e-3 then
+                    modulator_reference := (100.0-abs((realtime mod 500.0e-3)/500.0e-3 * 200.0-100.0))*2.0;
+                -- end if;
+                -- if realtime > 250.0e-3 then
+                --     modulator_reference := 140.0;
+                -- end if;
+                -- if realtime > 350.0e-3 then
+                --     modulator_reference := 190.0;
+                -- end if;
 
             ------- modulator -----------
 
