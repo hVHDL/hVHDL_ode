@@ -26,7 +26,7 @@ architecture vunit_simulation of fc_5level_tb is
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant stoptime : real := 10000.0e-3;
+    constant stoptime : real := 100.0e-3;
 
     ----------------------
     function fc_modulator
@@ -115,7 +115,7 @@ begin
         variable i_load : real := 10.0;
         constant l      : real := 20.0e-6;
         constant c      : real := 10.0e-6;
-        constant rl     : real := 100.0e-3;
+        constant rl     : real := 1.0e-3;
         constant cfc    : real := 4.0e-6;
 
         variable sw_frequency : real := 500.0e3;
@@ -249,6 +249,8 @@ begin
 
         variable sw_integ : real_vector(0 to 7) := (others => 0.0);
 
+        variable sw_times : real_vector(0 to 7) := (1 => 1.01, others => 1.0);
+
     begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
@@ -261,7 +263,7 @@ begin
                 ,"T_i4"
                 ,"T_i5"
                 ,"B_u0"
-                -- ,"B_u1"
+                ,"B_u1"
                 -- ,"B_u2"
                 -- ,"B_u3"
                 -- ,"B_u4"
@@ -281,6 +283,7 @@ begin
                     ,modulator_reference -- ,"B_u4"
                     ,lcr_rk5(1)          -- ,"B_u0"
                     ,get_fc_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3), 2 => lcr_rk5(4)))
+                    ,lcr_rk5(0)          -- ,"T_i0"
                     -- ,lcr_rk5(3)          -- ,"B_u2"
                     -- ,lcr_rk5(1)          -- ,"B_u0"
                     -- ,lcr_rk5(2)          -- ,"B_u1"
@@ -299,7 +302,7 @@ begin
 
                 -- modulator_reference := 40.0;
                 -- if realtime > 150.0e-3 then
-                    modulator_reference := (100.0-abs((realtime mod 500.0e-3)/500.0e-3 * 200.0-100.0))*2.0;
+                    modulator_reference := (100.0-abs((realtime mod 100.0e-3)/100.0e-3 * 200.0-100.0))*2.0;
                 -- end if;
                 -- if realtime > 250.0e-3 then
                 --     modulator_reference := 140.0;
@@ -317,7 +320,6 @@ begin
             if modulator_reference >= udc*2.0/4.0 then level_bits(2) := '1'; end if;
             if modulator_reference >= udc*3.0/4.0 then level_bits(3) := '1'; end if;
             --
-            ones_in_high_state := number_of_ones(level_bits);
             ones_in_low_state  := number_of_ones(level_bits)-1;
 
             -- check(ones_in_high_state = 1, "ones in high state " & integer'image(ones_in_high_state));
@@ -354,6 +356,9 @@ begin
                 pwm := '0';
             end if;
 
+            fc_duty       := get_fc_duty(modulator_reference, udc, level_bits);
+            steplength    := get_next_step_length(t_sw, pwm, fc_duty) + sw_times(state_index)*t_sw*0.0;
+
             next_sw_state := fc_5_sw_matrix(ones_in_low_state)(state_index);
             if state_index < 7 then
                 state_index := state_index + 1;
@@ -361,8 +366,6 @@ begin
                 state_index := 0;
             end if;
 
-            fc_duty       := get_fc_duty(modulator_reference, udc, level_bits);
-            steplength    := get_next_step_length(t_sw*2.0, pwm, fc_duty);
             prev_sw_state := sw_state; -- not needed at the moment
             sw_state      := next_sw_state;
 
@@ -376,11 +379,5 @@ begin
         end if; -- rising_edge
     end process stimulus;	
 
-    control : process(simulator_clock) is
-    begin
-        if rising_edge(simulator_clock)
-        then 
-        end if;
-    end process;
 ------------------------------------------------------------------------
 end vunit_simulation;
