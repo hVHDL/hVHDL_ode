@@ -26,7 +26,7 @@ architecture vunit_simulation of fc_5level_tb is
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant stoptime : real := 100.0e-3;
+    constant stoptime : real := 400.0e-3;
 
     ----------------------
     function fc_modulator
@@ -110,12 +110,13 @@ begin
 
     stimulus : process(simulator_clock)
 
+        constant initial_voltage_ref : real := 80.0;
         constant initial_dc_link : real := 200.0;
         variable udc    : real := initial_dc_link;
         variable i_load : real := 10.0;
         constant l      : real := 20.0e-6;
         constant c      : real := 10.0e-6;
-        constant rl     : real := 1.0e-3;
+        constant rl     : real := 100.0e-3;
         constant cfc    : real := 4.0e-6;
 
         variable sw_frequency : real := 500.0e3;
@@ -128,7 +129,7 @@ begin
         -- i_l, uc, ufc
         constant init_state_vector : real_vector := (
               0 => 0.0
-            , 1 => 0.0 -- udc
+            , 1 => initial_voltage_ref -- udc
             , 2 => initial_dc_link*1.0/4.0   -- fc1
             , 3 => initial_dc_link*2.0/4.0   -- fc2
             , 4 => initial_dc_link*3.0/4.0); -- fc3
@@ -249,7 +250,17 @@ begin
 
         variable sw_integ : real_vector(0 to 7) := (others => 0.0);
 
-        variable sw_times : real_vector(0 to 7) := (1 => 1.01, others => 1.0);
+        variable sw_times : real_vector(0 to 7) := (1 => 0.00, others => 0.0);
+        function sign (a : real) return real is
+            variable retval :real := 0.0;
+        begin
+            if a >= 0.0 then
+                retval := 1.0;
+            else
+                retval := -1.0;
+            end if;
+            return retval;
+        end sign;
 
     begin
         if rising_edge(simulator_clock) then
@@ -263,7 +274,7 @@ begin
                 ,"T_i4"
                 ,"T_i5"
                 ,"B_u0"
-                ,"B_u1"
+                -- ,"B_u1"
                 -- ,"B_u2"
                 -- ,"B_u3"
                 -- ,"B_u4"
@@ -282,8 +293,10 @@ begin
                     ,udc
                     ,modulator_reference -- ,"B_u4"
                     ,lcr_rk5(1)          -- ,"B_u0"
-                    ,get_fc_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3), 2 => lcr_rk5(4)))
-                    ,lcr_rk5(0)          -- ,"T_i0"
+                    -- ,get_fc_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2), 1 => lcr_rk5(3), 2 => lcr_rk5(4)))
+                    -- ,lcr_rk5(0)          -- ,"T_i0"
+                    -- ,avg_current_diff
+                    ,avg_current
                     -- ,lcr_rk5(3)          -- ,"B_u2"
                     -- ,lcr_rk5(1)          -- ,"B_u0"
                     -- ,lcr_rk5(2)          -- ,"B_u1"
@@ -302,10 +315,10 @@ begin
 
                 -- modulator_reference := 40.0;
                 -- if realtime > 150.0e-3 then
-                    modulator_reference := (100.0-abs((realtime mod 100.0e-3)/100.0e-3 * 200.0-100.0))*2.0;
+                    modulator_reference := (udc/2.0-abs((realtime mod 100.0e-3)/100.0e-3 * udc-udc/2.0))*2.0;
                 -- end if;
                 -- if realtime > 250.0e-3 then
-                --     modulator_reference := 140.0;
+                    -- modulator_reference := initial_voltage_ref;
                 -- end if;
                 -- if realtime > 350.0e-3 then
                 --     modulator_reference := 190.0;
@@ -325,39 +338,26 @@ begin
             -- check(ones_in_high_state = 1, "ones in high state " & integer'image(ones_in_high_state));
             -- check(ones_in_low_state = 0, "ones in low state " & integer'image(ones_in_low_state));
 
-            avg_current := (lcr_rk5(0) - prev_current)/2.0;
+            avg_current := (lcr_rk5(0) + prev_current)/2.0;
             avg_current_diff := (avg_current - prev_avg_current);
             prev_avg_current := avg_current;
-            -- sw_integ(state_index) :=sw_integ(state_index) + avg_current;
             prev_current := lcr_rk5(0);
+            -- sw_integ(state_index) :=sw_integ(state_index) + avg_current;
 
-            CASE sw_state(3 downto 2) is
-                WHEN "01" => sw_integ(2) := sw_integ(2) - sw_integ(2)*80.0e-3 + avg_current_diff;
-                WHEN "10" => sw_integ(2) := sw_integ(2) - sw_integ(2)*80.0e-3 - avg_current_diff;
-                WHEN others => 
-            end CASE;
-            CASE sw_state(2 downto 1) is
-                WHEN "01" => sw_integ(1) := sw_integ(1) - sw_integ(1)*80.0e-3 + avg_current_diff;
-                WHEN "10" => sw_integ(1) := sw_integ(1) - sw_integ(1)*80.0e-3 - avg_current_diff;
-                WHEN others => 
-            end CASE;
-            CASE sw_state(1 downto 0) is
-                WHEN "01" => sw_integ(0) := sw_integ(0) - sw_integ(0)*80.0e-3 + avg_current_diff;
-                WHEN "10" => sw_integ(0) := sw_integ(0) - sw_integ(0)*80.0e-3 - avg_current_diff;
-                WHEN others => 
-            end CASE;
-
-            -- if realtime > 100.0e-3 then udc := 150.0; end if;
+            if realtime > 200.0e-3 then udc := 150.0; end if;
             -- if realtime > 300.0e-3 then udc := 300.0; end if;
 
             if state_index mod 2 = 0 then
+                -- sw_times(state_index) := -(sign(avg_current_diff)) *avg_current_diff* 0.02;
                 pwm := '1';
             else
+                -- sw_times(state_index) := (sign(avg_current_diff)) *avg_current_diff* 0.02;
                 pwm := '0';
             end if;
 
+
             fc_duty       := get_fc_duty(modulator_reference, udc, level_bits);
-            steplength    := get_next_step_length(t_sw, pwm, fc_duty) + sw_times(state_index)*t_sw*0.0;
+            steplength    := get_next_step_length(t_sw, pwm, fc_duty) + sw_times(state_index)*t_sw;
 
             next_sw_state := fc_5_sw_matrix(ones_in_low_state)(state_index);
             if state_index < 7 then
