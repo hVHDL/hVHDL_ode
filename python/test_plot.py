@@ -9,7 +9,9 @@ def read_plot_config(filename):
     # <prefix>_title, <prefix>_ylabel (e.g. T_title, B_ylabel),
     # label_<column_name> to rename a signal's legend entry
     # (e.g. label_T_i0=Inductor current (A)), freq_pair_<name>, freq_fs,
-    # freq_nperseg, freq_xlim, freq_title for frequency response plots
+    # freq_nperseg (or freq_num_windows to split the data into N segments
+    # instead of specifying segment length directly), freq_xlim,
+    # freq_title, freq_unwrap_phase=true for frequency response plots
     # (see parse_freq_pairs/plot_freq_response), and combined_layout=true
     # to put the time-domain and frequency response plots in one 2x2 figure.
     config = {}
@@ -68,9 +70,17 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, ax_mag, ax_pha
     from freq_response import freq_response
 
     fs = float(config["freq_fs"])
-    nperseg = int(config.get("freq_nperseg", 1024))
+    unwrap_phase = is_true(config.get("freq_unwrap_phase", "false"))
 
     for filename, df in loaded:
+        # freq_num_windows=N splits this file's data into N segments;
+        # takes priority over freq_nperseg (default 1024) when set.
+        if "freq_num_windows" in config:
+            num_windows = max(1, int(float(config["freq_num_windows"])))
+            nperseg = max(1, len(df) // num_windows)
+        else:
+            nperseg = int(config.get("freq_nperseg", 1024))
+
         for name, x_col, y_col in freq_pairs:
             if x_col not in df.columns or y_col not in df.columns:
                 continue
@@ -83,8 +93,11 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, ax_mag, ax_pha
             label = signal_labels.get(name, name)
             if len(loaded) > 1:
                 label = f"{label} ({filename})"
+            phase = np.angle(h)
+            if unwrap_phase:
+                phase = np.unwrap(phase)
             ax_mag.semilogx(f, 20 * np.log10(np.abs(h)), label=label)
-            ax_phase.semilogx(f, np.degrees(np.angle(h)), label=label)
+            ax_phase.semilogx(f, np.degrees(phase), label=label)
 
     if "freq_xlim" in config:
         try:

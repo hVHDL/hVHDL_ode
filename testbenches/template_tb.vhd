@@ -49,16 +49,17 @@ begin
         constant c      : real := 100.0e-6;
         constant rl     : real := 1.0e-3;
 
-        variable sw_frequency : real := 200.0e3;
+        variable sw_frequency : real := 500.0e3;
         constant timestep : real := 1.0/sw_frequency;
         variable base_duty : real := 0.6;
         variable duty : real := 0.6;
 
         variable seed1, seed2 : positive := 1;
         variable rand : real;
+        variable input_voltage : real := 0.0;
 
         -- i_l, uc
-        constant init_state_vector : real_vector := (0 => 0.0, 1 => 0.0);
+        constant init_state_vector : real_vector := (0 => 0.0, 1 => 0.0, 2 => 0.0, 3 => 0.0);
 
         ----------
         -- average bridge voltage over a switching cycle, no switching ripple
@@ -72,15 +73,19 @@ begin
         ----------
         impure function deriv_lcr(t : real; states : real_vector) return real_vector is
             variable retval : states'subtype := (others => 0.0);
-            alias il is states(0);
-            alias uc is states(1);
+            alias il  is states(0);
+            alias uc  is states(1);
+            alias i2  is states(2);
+            alias uc2 is states(3);
         begin
 
-            if t > 250.0e-6 then i_load := 10.0; end if;
+            -- if t > 250.0e-6 then i_load := 10.0; end if;
             if t > 600.0e-6 then base_duty := 0.4; end if;
 
-            retval(0) := (get_bridge_voltage(duty, udc) - il * rl - uc) * (1.0/l);
-            retval(1) := (il - i_load) * (1.0/c);
+            retval(0) := (input_voltage - il * rl - uc) * (1.0/l);
+            retval(1) := (il - i2) * (1.0/c);
+            retval(2) := (uc - uc2) * (1.0/c);
+            retval(3) := (i2- i_load) * (1.0/c);
 
             return retval;
 
@@ -94,7 +99,6 @@ begin
         use ode.real_vector_pkg.all;
     begin
         if rising_edge(simulator_clock) then
-            simulation_counter <= simulation_counter + 1;
             if simulation_counter = 0 then
                 write_plot_config(file_handler, "title", "LCR filter testbench");
                 write_plot_config(file_handler, "T_title", "Inductor current");
@@ -105,10 +109,12 @@ begin
                 write_plot_config(file_handler, "label_B_u0", "Bridge voltage");
                 write_plot_config(file_handler, "label_B_u1", "Capacitor voltage");
 
+                -- bode plot
                 write_plot_config(file_handler, "combined_layout", "true");
+                -- write_plot_config(file_handler, "freq_unwrap_phase", "true");
                 write_plot_config(file_handler, "freq_fs", real'image(sw_frequency));
-                write_plot_config(file_handler, "freq_nperseg", "5000");
-                -- write_plot_config(file_handler, "freq_xlim", "1000,80000");
+                write_plot_config(file_handler, "freq_num_windows", "4");
+                write_plot_config(file_handler, "freq_xlim", "2e2,200e3");
                 write_plot_config(file_handler, "freq_pair_iL", "B_u0,T_i0");
                 write_plot_config(file_handler, "freq_pair_uC", "B_u0,B_u1");
                 write_plot_config(file_handler, "label_iL", "Bridge voltage to inductor current");
@@ -120,19 +126,20 @@ begin
                 ,"B_u1"
                 ));
             end if;
+            simulation_counter <= simulation_counter + 1;
 
             -- 5% random dither on duty, same technique as fc_4level_tb,
             -- broadens the bridge voltage's spectral content so the
             -- frequency response above can be estimated from it.
             uniform(seed1, seed2, rand);
-            rand := ((rand - 0.5) * 2.0) * 0.01;
-            duty := base_duty + rand;
+            rand := ((rand - 0.5) * 2.0) * 5.05;
+            input_voltage := rand;
 
             realtime <= realtime + timestep;
 
             write_to(file_handler,(realtime
                     ,lcr_rk5(0)
-                    ,get_bridge_voltage(duty, udc)
+                    ,input_voltage
                     ,lcr_rk5(1)
                 ));
 
