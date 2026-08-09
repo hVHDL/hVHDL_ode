@@ -25,7 +25,7 @@ architecture vunit_simulation of template_tb is
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant stoptime : real := 100.0e-3;
+    constant stoptime : real := 500.0e-3;
 
 begin
 
@@ -45,9 +45,9 @@ begin
 
         variable udc    : real := 10.0;
         variable i_load : real := 0.0;
-        constant l      : real := 10.0e-6;
-        constant c      : real := 100.0e-6;
-        constant rl     : real := 1.0e-3;
+        constant l      : real := 2.0e-6;
+        constant c      : real := 200.0e-6;
+        constant rl     : real := 2.0e-3;
 
         variable sw_frequency : real := 500.0e3;
         constant timestep : real := 1.0/sw_frequency;
@@ -113,7 +113,7 @@ begin
                 write_plot_config(file_handler, "combined_layout", "true");
                 -- write_plot_config(file_handler, "freq_unwrap_phase", "true");
                 write_plot_config(file_handler, "freq_fs", real'image(sw_frequency));
-                write_plot_config(file_handler, "freq_num_windows", "4");
+                write_plot_config(file_handler, "freq_num_windows", "5");
                 write_plot_config(file_handler, "freq_xlim", "2e2,200e3");
                 write_plot_config(file_handler, "freq_pair_iL", "B_u0,T_i0");
                 write_plot_config(file_handler, "freq_pair_uC", "B_u0,B_u1");
@@ -132,7 +132,7 @@ begin
             -- broadens the bridge voltage's spectral content so the
             -- frequency response above can be estimated from it.
             uniform(seed1, seed2, rand);
-            rand := ((rand - 0.5) * 2.0) * 5.05;
+            rand := ((rand - 0.5) * 2.0) * 0.1;
             input_voltage := rand;
 
             realtime <= realtime + timestep;
@@ -140,7 +140,7 @@ begin
             write_to(file_handler,(realtime
                     ,lcr_rk5(0)
                     ,input_voltage
-                    ,lcr_rk5(1)
+                    ,lcr_rk5(3)
                 ));
 
             rk5(realtime, lcr_rk5, timestep);
