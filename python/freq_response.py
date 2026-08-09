@@ -33,6 +33,11 @@ def freq_response(x, y, fs=1.0, nperseg=1024, window='flattop',
     coh : ndarray
         Magnitude-squared coherence (0...1)
     """
+    # scipy's spectral estimators index inputs with tuples internally
+    # (e.g. x[..., i0:i1]), which pandas Series/DataFrame don't support.
+    x = np.asarray(x)
+    y = np.asarray(y)
+
     # Compute cross power spectral density and auto power spectral density
     f, Pxx = signal.csd(x,x, fs=fs, window=window, nperseg=nperseg,
                          scaling=scaling, detrend=detrend, axis=-1)
