@@ -1,6 +1,6 @@
-LIBRARY ieee  ; 
-    USE ieee.NUMERIC_STD.all  ; 
-    USE ieee.std_logic_1164.all  ; 
+LIBRARY ieee  ;
+    USE ieee.NUMERIC_STD.all  ;
+    USE ieee.std_logic_1164.all  ;
     use ieee.math_real.all;
     use std.textio.all;
 
@@ -18,14 +18,14 @@ end;
 architecture vunit_simulation of template_tb is
 
     constant clock_period : time := 1 ns;
-    
+
     signal simulator_clock    : std_logic := '0';
     signal simulation_counter : natural   := 0;
     -----------------------------------
     -- simulation specific signals ----
 
     signal realtime : real := 0.0;
-    constant stoptime : real := 1.0e-3;
+    constant stoptime : real := 100.0e-3;
 
 begin
 
@@ -36,7 +36,7 @@ begin
         wait until realtime >= stoptime;
         test_runner_cleanup(runner); -- Simulation ends here
         wait;
-    end process simtime;	
+    end process simtime;
 
     simulator_clock <= not simulator_clock after clock_period/2.0;
 ------------------------------------------------------------------------
@@ -45,115 +45,42 @@ begin
 
         variable udc    : real := 10.0;
         variable i_load : real := 0.0;
-        constant l      : real := 1.0e-6;
+        constant l      : real := 10.0e-6;
         constant c      : real := 100.0e-6;
-        constant rl     : real := 20.0e-3;
-        constant cfc    : real := 40.0e-6;
+        constant rl     : real := 1.0e-3;
 
         variable sw_frequency : real := 200.0e3;
-        variable t_sw : real := 1.0/sw_frequency;
+        constant timestep : real := 1.0/sw_frequency;
+        variable base_duty : real := 0.6;
         variable duty : real := 0.6;
 
-        ----------------------
-        function fc_modulator
-        (
-            gate_signals : bit_vector
-        )
-        return real is
-            variable retval : real;
-        begin
-            CASE gate_signals is
-                WHEN "10" => retval := -1.0;
-                WHEN "01" => retval := 1.0;
-                WHEN others => retval := 0.0;
-            end CASE;
-            
-            return retval;
-        end fc_modulator;
-        ----------------------
+        variable seed1, seed2 : positive := 1;
+        variable rand : real;
 
-        -- i_l, uc, ufc
-        constant init_state_vector : real_vector := (0 => 0.0, 1 => 0.0,  2 => udc*0.45);
-
-        subtype sw_states is bit_vector(1 downto 0);
-
-        constant dc     : bit_vector(1 downto 0) := "11";
-        constant p_half : bit_vector(1 downto 0) := "10";
-        constant n_half : bit_vector(1 downto 0) := "01";
-        constant zero   : bit_vector(1 downto 0) := "00";
-
-        variable sw_state      : sw_states := dc;
-        variable next_sw_state : sw_states := p_half;
-        variable prev_sw_state : sw_states := n_half;
+        -- i_l, uc
+        constant init_state_vector : real_vector := (0 => 0.0, 1 => 0.0);
 
         ----------
-        function get_next_sw_state(sw_state : sw_states; prev_state : sw_states) return sw_states is
-            variable next_sw_state : sw_states;
+        -- average bridge voltage over a switching cycle, no switching ripple
+        function get_bridge_voltage(duty : real; udc : real) return real is
         begin
 
-            case sw_state is
-                WHEN dc => 
-                    if prev_state = n_half then 
-                        next_sw_state := p_half;
-                    else
-                        next_sw_state := n_half;
-                    end if;
+            return duty * udc;
 
-                WHEN p_half => next_sw_state := dc;
-                WHEN n_half => next_sw_state := dc;
-                WHEN zero   => next_sw_state := n_half;
-
-            end CASE;
-
-            return next_sw_state;
-        end get_next_sw_state;
-
-        ----------
-        impure function get_step_length return real is
-            variable step_length : real := 1.0e-9;
-        begin
-
-            case sw_state is
-                WHEN dc     => step_length := t_sw * duty;
-                WHEN p_half => step_length := t_sw * (1.0-duty);
-                WHEN n_half => step_length := t_sw * (1.0-duty);
-                WHEN zero   => step_length := t_sw * (1.0-duty);
-            end CASE;
-
-            return step_length;
-
-        end get_step_length;
-        ----------
-        function get_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
-            variable bridge_voltage : real := 0.0;
-        begin
-
-            bridge_voltage := 
-                fc_modulator(('0', sw_state(1)))   * udc
-              + fc_modulator(sw_state(1 downto 0)) * ufc(0);
-
-            return bridge_voltage;
         end get_bridge_voltage;
 
         ----------
         impure function deriv_lcr(t : real; states : real_vector) return real_vector is
             variable retval : states'subtype := (others => 0.0);
-            variable bridge_voltage : real := 0.0;
             alias il is states(0);
             alias uc is states(1);
-            alias ufc1 is states(2);
         begin
 
             if t > 250.0e-6 then i_load := 10.0; end if;
-            if t > 600.0e-6 then duty := 0.4; end if;
+            if t > 600.0e-6 then base_duty := 0.4; end if;
 
-            bridge_voltage := 
-                fc_modulator(('0', sw_state(1)))   * udc
-              + fc_modulator(sw_state(1 downto 0)) * ufc1;
-
-            retval(0) := (bridge_voltage - il * rl - uc) * (1.0/l);
+            retval(0) := (get_bridge_voltage(duty, udc) - il * rl - uc) * (1.0/l);
             retval(1) := (il - i_load) * (1.0/c);
-            retval(2) := -fc_modulator(sw_state(1 downto 0)) * il / cfc;
 
             return retval;
 
@@ -169,38 +96,49 @@ begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
             if simulation_counter = 0 then
+                write_plot_config(file_handler, "title", "LCR filter testbench");
+                write_plot_config(file_handler, "T_title", "Inductor current");
+                write_plot_config(file_handler, "T_ylabel", "Current [A]");
+                write_plot_config(file_handler, "B_title", "Bridge and capacitor voltages");
+                write_plot_config(file_handler, "B_ylabel", "Voltage [V]");
+                write_plot_config(file_handler, "label_T_i0", "Inductor current");
+                write_plot_config(file_handler, "label_B_u0", "Bridge voltage");
+                write_plot_config(file_handler, "label_B_u1", "Capacitor voltage");
+
+                write_plot_config(file_handler, "combined_layout", "true");
+                write_plot_config(file_handler, "freq_fs", real'image(sw_frequency));
+                write_plot_config(file_handler, "freq_nperseg", "5000");
+                -- write_plot_config(file_handler, "freq_xlim", "1000,80000");
+                write_plot_config(file_handler, "freq_pair_iL", "B_u0,T_i0");
+                write_plot_config(file_handler, "freq_pair_uC", "B_u0,B_u1");
+                write_plot_config(file_handler, "label_iL", "Bridge voltage to inductor current");
+                write_plot_config(file_handler, "label_uC", "Bridge voltage to capacitor voltage");
+
                 init_simfile(file_handler, ("time"
                 ,"T_i0"
                 ,"B_u0"
                 ,"B_u1"
-                ,"B_u2"
                 ));
             end if;
 
+            -- 5% random dither on duty, same technique as fc_4level_tb,
+            -- broadens the bridge voltage's spectral content so the
+            -- frequency response above can be estimated from it.
+            uniform(seed1, seed2, rand);
+            rand := ((rand - 0.5) * 2.0) * 0.01;
+            duty := base_duty + rand;
 
-            realtime <= realtime + get_step_length;
+            realtime <= realtime + timestep;
 
             write_to(file_handler,(realtime
-                    ,lcr_rk5(0) 
-                    ,get_bridge_voltage(prev_sw_state, udc, ufc => (0 => lcr_rk5(2)))
-                    ,lcr_rk5(1) 
-                    ,lcr_rk5(2) 
+                    ,lcr_rk5(0)
+                    ,get_bridge_voltage(duty, udc)
+                    ,lcr_rk5(1)
                 ));
 
-            write_to(file_handler,(realtime
-                    ,lcr_rk5(0) 
-                    ,get_bridge_voltage(sw_state, udc, ufc => (0 => lcr_rk5(2)))
-                    ,lcr_rk5(1) 
-                    ,lcr_rk5(2) 
-                ));
-
-            rk5(realtime, lcr_rk5, get_step_length);
-
-            prev_sw_state := sw_state;
-            sw_state      := next_sw_state;
-            next_sw_state := get_next_sw_state(sw_state, prev_sw_state);
+            rk5(realtime, lcr_rk5, timestep);
 
         end if; -- rising_edge
-    end process stimulus;	
+    end process stimulus;
 ------------------------------------------------------------------------
 end vunit_simulation;

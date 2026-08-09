@@ -61,36 +61,25 @@ if __name__ == "__main__":
     t = np.arange(0, 10000, 1/fs)
     x = np.random.randn(len(t))
     # System: 2nd order low-pass with resonance at ~80 Hz
-    y = signal.lfilter(*signal.butter(8, 150/(fs/2), btype='low'), x) + 0.2*np.random.randn(len(t))
+    y = signal.lfilter(*signal.butter(8, 150/(fs/2), btype='low'), x) + np.random.randn(len(t))
     
     # Calculate frequency response
-    f, H, coh = freq_response(x, y, fs=fs, nperseg=1000)
-    
+    f, H, _ = freq_response(x, y, fs=fs, nperseg=250)
+
     # Plot
-    plt.figure(figsize=(12, 8))
-    
-    plt.subplot(3,1,1)
-    plt.semilogy(f, np.abs(H))
-    plt.grid(True, alpha=0.3)
-    plt.title("Magnitude |H(f)|")
-    plt.ylabel("Gain")
-    plt.xlim(0, 300)
-    
-    plt.subplot(3,1,2)
-    plt.plot(f, np.angle(H, deg=True))
-    plt.grid(True, alpha=0.3)
-    plt.title("Phase")
-    plt.ylabel("Phase [°]")
-    plt.xlim(0, 300)
-    
-    plt.subplot(3,1,3)
-    plt.semilogy(f, coh)
-    plt.grid(True, alpha=0.3)
-    plt.title("Coherence")
-    plt.xlabel("Frequency [Hz]")
-    plt.ylabel("Coherence")
-    plt.xlim(0, 300)
-    plt.ylim(0, 1.1)
-    
+    fig, (ax_mag, ax_phase) = plt.subplots(2, 1, sharex=True, figsize=(12, 8))
+
+    ax_mag.semilogx(f, 20*np.log10(np.abs(H)))
+    ax_mag.grid(True, alpha=0.3)
+    ax_mag.set_title("Magnitude |H(f)|")
+    ax_mag.set_ylabel("Gain")
+    # ax_mag.set_xlim(0, 300)
+
+    ax_phase.semilogx(f, np.angle(H, deg=True))
+    ax_phase.grid(True, alpha=0.3)
+    ax_phase.set_title("Phase")
+    ax_phase.set_xlabel("Frequency [Hz]")
+    ax_phase.set_ylabel("Phase [°]")
+
     plt.tight_layout()
     plt.show()

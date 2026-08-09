@@ -17,6 +17,14 @@ package write_pkg is
         file filee : text;
         data_to_be_written : stringarray);
 ------------------------------------------------------------------------
+    -- writes a "#CONFIG key=value" line that test_plot.py reads to
+    -- configure plot titles/labels. Recognized keys: title, xlabel,
+    -- <prefix>_title, <prefix>_ylabel (e.g. T_title, B_ylabel).
+    procedure write_plot_config (
+        file filee : text;
+        key   : string;
+        value : string);
+------------------------------------------------------------------------
 end package write_pkg;
 
 package body write_pkg is
@@ -54,5 +62,20 @@ package body write_pkg is
 
         writeline(filee , row);
     end init_simfile;
+------------------------------------------------------------------------
+    procedure write_plot_config
+    (
+        file filee : text;
+        key   : string;
+        value : string
+    ) is
+        variable row : line;
+    begin
+        write(row, string'("#CONFIG "));
+        write(row, key);
+        write(row, string'("="));
+        write(row, value);
+        writeline(filee, row);
+    end write_plot_config;
 ------------------------------------------------------------------------
 end package body write_pkg;

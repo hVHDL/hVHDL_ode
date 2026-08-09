@@ -234,6 +234,14 @@ begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
             if simulation_counter = 0 then
+                write_plot_config(file_handler, "freq_fs", real'image(sw_frequency));
+                write_plot_config(file_handler, "freq_nperseg", "10000");
+                write_plot_config(file_handler, "freq_xlim", "1000,500000");
+                write_plot_config(file_handler, "freq_pair_iL", "B_u4,T_i0");
+                write_plot_config(file_handler, "freq_pair_uC", "B_u4,B_u0");
+                write_plot_config(file_handler, "label_iL", "Inductor current response");
+                write_plot_config(file_handler, "label_uC", "Capacitor voltage response");
+
                 init_simfile(file_handler, ("time"
                 ,"T_i0"
                 ,"T_i1"
