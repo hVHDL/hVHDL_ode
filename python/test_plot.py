@@ -11,9 +11,10 @@ def read_plot_config(filename):
     # (e.g. label_T_i0=Inductor current (A)), freq_pair_<name>, freq_fs,
     # freq_nperseg (or freq_num_windows to split the data into N segments
     # instead of specifying segment length directly), freq_xlim,
-    # freq_title, freq_unwrap_phase=true for frequency response plots
-    # (see parse_freq_pairs/plot_freq_response), and combined_layout=true
-    # to put the time-domain and frequency response plots in one 2x2 figure.
+    # phase_ylim, freq_title, freq_unwrap_phase=true for frequency
+    # response plots (see parse_freq_pairs/plot_freq_response), and
+    # combined_layout=true to put the time-domain and frequency response
+    # plots in one 2x2 figure.
     config = {}
     with open(filename) as f:
         for line in f:
@@ -105,6 +106,13 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, ax_mag, ax_pha
             ax_mag.set_xlim(lo, hi)
         except ValueError:
             print(f"Warning: freq_xlim must be 'low,high', got '{config['freq_xlim']}'. Ignoring.")
+
+    if "phase_ylim" in config:
+        try:
+            lo, hi = (float(v) for v in config["phase_ylim"].split(","))
+            ax_phase.set_ylim(lo, hi)
+        except ValueError:
+            print(f"Warning: phase_ylim must be 'low,high', got '{config['phase_ylim']}'. Ignoring.")
 
     ax_mag.set_title(config.get("freq_title", "Frequency Response"))
     ax_mag.set_ylabel("Magnitude [dB]")
