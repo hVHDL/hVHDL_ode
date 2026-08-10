@@ -45,8 +45,8 @@ begin
 
         variable udc    : real := 10.0;
         variable i_load : real := 0.0;
-        constant l      : real := 2.0e-6;
-        constant c      : real := 200.0e-6;
+        constant l      : real := 1.0e-6;
+        constant c      : real := 100.0e-6;
         constant rl     : real := 2.0e-3;
 
         variable sw_frequency : real := 500.0e3;
@@ -108,6 +108,9 @@ begin
                 write_plot_config(file_handler, "label_T_i0", "Inductor current");
                 write_plot_config(file_handler, "label_B_u0", "Bridge voltage");
                 write_plot_config(file_handler, "label_B_u1", "Capacitor voltage");
+                write_plot_config(file_handler, "xlim", "0,5e-3");
+                -- write_plot_config(file_handler, "T_ylim", "-4,4");
+                -- write_plot_config(file_handler, "B_ylim", "-0.3,0.3");
 
                 -- bode plot
                 write_plot_config(file_handler, "combined_layout", "true");
@@ -134,7 +137,12 @@ begin
             -- frequency response above can be estimated from it.
             uniform(seed1, seed2, rand);
             rand := ((rand - 0.5) * 2.0) * 0.1;
-            input_voltage := rand;
+
+            input_voltage := rand + 1.0;
+
+            if realtime > 2.5e-3 then
+                input_voltage := rand + 2.0;
+            end if;
 
             realtime <= realtime + timestep;
 

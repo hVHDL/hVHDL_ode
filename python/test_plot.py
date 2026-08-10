@@ -8,13 +8,13 @@ def read_plot_config(filename):
     # to configure titles/labels. Recognized keys: title, xlabel,
     # <prefix>_title, <prefix>_ylabel (e.g. T_title, B_ylabel),
     # label_<column_name> to rename a signal's legend entry
-    # (e.g. label_T_i0=Inductor current (A)), freq_pair_<name>, freq_fs,
-    # freq_nperseg (or freq_num_windows to split the data into N segments
-    # instead of specifying segment length directly), freq_xlim,
-    # phase_ylim, freq_title, freq_unwrap_phase=true for frequency
-    # response plots (see parse_freq_pairs/plot_freq_response), and
-    # combined_layout=true to put the time-domain and frequency response
-    # plots in one 2x2 figure.
+    # (e.g. label_T_i0=Inductor current (A)), xlim/T_ylim/B_ylim for the
+    # time-domain plot, freq_pair_<name>, freq_fs, freq_nperseg (or
+    # freq_num_windows to split the data into N segments instead of
+    # specifying segment length directly), freq_xlim, phase_ylim,
+    # freq_title, freq_unwrap_phase=true for frequency response plots
+    # (see parse_freq_pairs/plot_freq_response), and combined_layout=true
+    # to put the time-domain and frequency response plots in one 2x2 figure.
     config = {}
     with open(filename) as f:
         for line in f:
@@ -46,6 +46,17 @@ def parse_freq_pairs(config):
 def is_true(value):
     return str(value).strip().lower() in ("1", "true", "yes")
 
+def parse_limit_pair(config, key):
+    # "<key>=low,high", e.g. "xlim=0,1e-3" or "T_ylim=-5,5"
+    if key not in config:
+        return None
+    try:
+        lo, hi = (float(v) for v in config[key].split(","))
+        return lo, hi
+    except ValueError:
+        print(f"Warning: {key} must be 'low,high', got '{config[key]}'. Ignoring.")
+        return None
+
 def plot_time_domain(loaded, config, signal_labels, ax_top, ax_bottom):
     for filename, df in loaded:
         # Split columns into top and bottom based on the prefix
@@ -66,6 +77,18 @@ def plot_time_domain(loaded, config, signal_labels, ax_top, ax_bottom):
             ax_bottom.grid(True)
 
     ax_bottom.set_xlabel(config.get("xlabel", "Time"))
+
+    xlim = parse_limit_pair(config, "xlim")
+    if xlim:
+        ax_bottom.set_xlim(*xlim)
+
+    t_ylim = parse_limit_pair(config, "T_ylim")
+    if t_ylim:
+        ax_top.set_ylim(*t_ylim)
+
+    b_ylim = parse_limit_pair(config, "B_ylim")
+    if b_ylim:
+        ax_bottom.set_ylim(*b_ylim)
 
 def plot_freq_response(loaded, config, freq_pairs, signal_labels, ax_mag, ax_phase):
     from freq_response import freq_response
@@ -100,19 +123,13 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, ax_mag, ax_pha
             ax_mag.semilogx(f, 20 * np.log10(np.abs(h)), label=label)
             ax_phase.semilogx(f, np.degrees(phase), label=label)
 
-    if "freq_xlim" in config:
-        try:
-            lo, hi = (float(v) for v in config["freq_xlim"].split(","))
-            ax_mag.set_xlim(lo, hi)
-        except ValueError:
-            print(f"Warning: freq_xlim must be 'low,high', got '{config['freq_xlim']}'. Ignoring.")
+    freq_xlim = parse_limit_pair(config, "freq_xlim")
+    if freq_xlim:
+        ax_mag.set_xlim(*freq_xlim)
 
-    if "phase_ylim" in config:
-        try:
-            lo, hi = (float(v) for v in config["phase_ylim"].split(","))
-            ax_phase.set_ylim(lo, hi)
-        except ValueError:
-            print(f"Warning: phase_ylim must be 'low,high', got '{config['phase_ylim']}'. Ignoring.")
+    phase_ylim = parse_limit_pair(config, "phase_ylim")
+    if phase_ylim:
+        ax_phase.set_ylim(*phase_ylim)
 
     ax_mag.set_title(config.get("freq_title", "Frequency Response"))
     ax_mag.set_ylabel("Magnitude [dB]")
