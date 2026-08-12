@@ -45,7 +45,7 @@ begin
 
         variable udc    : real := 10.0;
         variable i_load : real := 0.0;
-        constant l      : real := 1.0e-6;
+        constant l      : real := 2.0e-6;
         constant c      : real := 100.0e-6;
         constant rl     : real := 2.0e-3;
 
@@ -109,8 +109,8 @@ begin
                 write_plot_config(file_handler, "label_B_u0", "Bridge voltage");
                 write_plot_config(file_handler, "label_B_u1", "Capacitor voltage");
                 write_plot_config(file_handler, "xlim", "0,5e-3");
-                -- write_plot_config(file_handler, "T_ylim", "-4,4");
-                -- write_plot_config(file_handler, "B_ylim", "-0.3,0.3");
+                write_plot_config(file_handler, "T_ylim", "-4,4");
+                write_plot_config(file_handler, "B_ylim", "-0.3,0.3");
 
                 -- bode plot
                 write_plot_config(file_handler, "combined_layout", "true");
@@ -123,6 +123,9 @@ begin
                 write_plot_config(file_handler, "freq_pair_uC", "B_u0,B_u1");
                 write_plot_config(file_handler, "label_iL", "Bridge voltage to inductor current");
                 write_plot_config(file_handler, "label_uC", "Bridge voltage to capacitor voltage");
+                -- save the computed response so it can be overlaid on a
+                -- later run's plot, e.g.: python test_plot.py other.dat template_tb_uC.csv
+                -- write_plot_config(file_handler, "freq_save_uC", "template_tb_uC.csv");
 
                 init_simfile(file_handler, ("time"
                 ,"T_i0"
