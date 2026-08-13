@@ -31,7 +31,7 @@ def read_plot_config(filename):
     # (e.g. label_T_i0=Inductor current (A)), xlim/T_ylim/B_ylim for the
     # time-domain plot, freq_pair_<name>, freq_fs, freq_nperseg (or
     # freq_num_windows to split the data into N segments instead of
-    # specifying segment length directly), freq_xlim, phase_ylim,
+    # specifying segment length directly), freq_xlim, mag_ylim, phase_ylim,
     # freq_title, freq_unwrap_phase=true, freq_save_<name>=<path> to save
     # that pair's computed response to a file (see save_freq_response,
     # is_saved_freq_response) for overlaying onto a later plot, for
@@ -197,6 +197,10 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, saved_response
     freq_xlim = parse_limit_pair(config, "freq_xlim")
     if freq_xlim:
         ax_mag.set_xlim(*freq_xlim)
+
+    mag_ylim = parse_limit_pair(config, "mag_ylim")
+    if mag_ylim:
+        ax_mag.set_ylim(*mag_ylim)
 
     phase_ylim = parse_limit_pair(config, "phase_ylim")
     if phase_ylim:

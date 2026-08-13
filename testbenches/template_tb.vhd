@@ -118,6 +118,7 @@ begin
                 write_plot_config(file_handler, "freq_fs", real'image(sw_frequency));
                 write_plot_config(file_handler, "freq_num_windows", "5");
                 write_plot_config(file_handler, "freq_xlim", "2e2,100e3");
+                write_plot_config(file_handler, "mag_ylim", "-40,10");
                 write_plot_config(file_handler, "phase_ylim", "-400,100");
                 write_plot_config(file_handler, "freq_pair_iL", "B_u0,T_i0");
                 write_plot_config(file_handler, "freq_pair_uC", "B_u0,B_u1");
