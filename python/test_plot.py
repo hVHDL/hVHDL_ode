@@ -1,7 +1,27 @@
 import os
+import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+# Column name aliases accepted for a saved/external frequency response file,
+# e.g. a VHDL frequency-sweep testbench writing "freq  gain  angl" columns
+# instead of test_plot's own "frequency,magnitude_db,phase_deg".
+FREQ_RESPONSE_COLUMN_ALIASES = {
+    "frequency": ("frequency", "freq", "f"),
+    "magnitude_db": ("magnitude_db", "gain", "mag_db", "magnitude"),
+    "phase_deg": ("phase_deg", "angl", "angle", "phase"),
+}
+
+def resolve_freq_response_columns(columns):
+    lookup = {str(c).strip().lower(): c for c in columns}
+    resolved = {}
+    for canonical, aliases in FREQ_RESPONSE_COLUMN_ALIASES.items():
+        actual = next((lookup[alias] for alias in aliases if alias in lookup), None)
+        if actual is None:
+            return None
+        resolved[canonical] = actual
+    return resolved
 
 def read_plot_config(filename):
     # VHDL testbenches may write lines like "#CONFIG T_title=Currents (A)"
@@ -32,10 +52,13 @@ def read_plot_config(filename):
     return config
 
 def is_saved_freq_response(filename):
-    # Detects a saved frequency response, as opposed to a simulation .dat
-    # file: either the marker written by save_freq_response, or a bare
-    # "frequency,magnitude_db,phase_deg" CSV (e.g. hand-made or exported
-    # from elsewhere), skipping any leading #-comment lines.
+    # Detects a saved/external frequency response, as opposed to a
+    # time-domain simulation .dat file: either the marker written by
+    # save_freq_response, or a bare header whose columns resolve via
+    # FREQ_RESPONSE_COLUMN_ALIASES (e.g. a comma-separated
+    # "frequency,magnitude_db,phase_deg" file, or a whitespace-separated
+    # VHDL frequency-sweep testbench's "freq  gain  angl"), skipping any
+    # leading #-comment lines.
     with open(filename) as f:
         for line in f:
             line = line.strip()
@@ -45,7 +68,7 @@ def is_saved_freq_response(filename):
                 return True
             if line.startswith("#"):
                 continue
-            return line.replace(" ", "").lower() == "frequency,magnitude_db,phase_deg"
+            return resolve_freq_response_columns(re.split(r"[,\s]+", line)) is not None
     return False
 
 def save_freq_response(path, label, f, mag_db, phase_deg):
@@ -200,9 +223,10 @@ def plot_data(filenames, config_overrides=None, freq_only=False):
         try:
             if is_saved_freq_response(filename):
                 file_config = read_plot_config(filename)
-                fr_df = pd.read_csv(filename, comment='#')
+                fr_df = pd.read_csv(filename, sep=r'[,\s]+', engine='python', comment='#')
+                cols = resolve_freq_response_columns(fr_df.columns)
                 label = file_config.get("label", os.path.basename(filename))
-                saved_responses.append((label, fr_df["frequency"].to_numpy(), fr_df["magnitude_db"].to_numpy(), fr_df["phase_deg"].to_numpy()))
+                saved_responses.append((label, fr_df[cols["frequency"]].to_numpy(), fr_df[cols["magnitude_db"]].to_numpy(), fr_df[cols["phase_deg"]].to_numpy()))
                 continue
 
             file_config = read_plot_config(filename)
