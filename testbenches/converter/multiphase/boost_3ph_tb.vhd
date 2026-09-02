@@ -69,10 +69,22 @@ architecture vunit_simulation of boost_3ph_tb is
         return natural(round(seconds / minimum_time_step));
     end function;
 
-    constant stoptime       : real    := 4.0e-3;
+    constant stoptime       : real    := 500.0e-3;
     constant stoptime_ticks : natural := to_ticks(stoptime);
 
     signal realtime_ticks : natural := 0;
+
+    -- low-side (charge) duty ratio (Vout = Vin / (1 - duty)), shared by all
+    -- three phases and produced by p_modulation.
+    constant base_duty : real := 0.5;
+    signal   duty      : real := base_duty;
+
+    -- Handshake between the simulation step (stimulus) and the duty-cycle
+    -- modulator (p_modulation): stimulus pulses sim_ready to ask for a fresh
+    -- duty ratio; p_modulation computes it and pulses modulation_ready;
+    -- stimulus then runs the next integration segment.
+    signal sim_ready        : boolean := false;
+    signal modulation_ready : boolean := false;
 
     ----------------------
     -- half-bridge modulator : 1.0 while a phase's switch node is tied to
@@ -116,13 +128,9 @@ begin
 
         variable sw_frequency : real := 100.0e3;
         variable t_sw : real := 1.0/sw_frequency;
-        variable duty : real := 0.5;         -- low-side (charge) on-time fraction
 
         -- each inter-edge segment is integrated as this many equal rk5 steps
         constant steps_per_segment : positive := 1;
-
-        variable seed1, seed2 : positive := 1;
-        variable rand : real;
 
         -- iL1, iL2, iL3, vC. vC starts at Vin (output cap pre-charged
         -- through the Q2x body diodes before switching begins).
@@ -137,6 +145,7 @@ begin
         -- absolute tick at which each phase next toggles
         variable next_edge : tick_array := (others => 0);
         variable phases_initialised : boolean := false;
+        variable simulation_started : boolean := false;
 
         impure function deriv_boost(t : real; states : real_vector) return real_vector is
             variable retval      : states'subtype := (others => 0.0);
@@ -160,8 +169,12 @@ begin
         file file_handler : text open write_mode is "boost_3ph_tb.dat";
 
         variable charge_ticks   : natural := 0;
-        variable transfer_ticks : natural := 0;
-        variable period_ticks   : natural := 0;
+        variable period_ticks   : natural := 0;   -- fixed switching period in ticks
+        -- start tick of each phase's *next* switching cycle. Edges are
+        -- scheduled off this fixed grid, so a phase's period is always
+        -- exactly period_ticks regardless of duty dither and the phases
+        -- never drift relative to each other.
+        variable cycle_start    : tick_array := (others => 0);
         variable offset         : natural := 0;
         variable target_ticks   : natural := 0;
         variable segment_ticks  : natural := 0;
@@ -171,7 +184,9 @@ begin
 
     begin
         if rising_edge(simulator_clock) then
-            if simulation_counter = 0 then
+            sim_ready <= false;   -- default: sim_ready is a single-cycle pulse
+
+            if not simulation_started then
                 write_plot_config(file_handler, "title", "Three interleaved boost converters");
                 write_plot_config(file_handler, "T_title", "Phase and total input currents");
                 write_plot_config(file_handler, "T_ylabel", "Current [A]");
@@ -196,19 +211,21 @@ begin
                 ,"B_u1"
                 ,"B_u2"
                 ));
-            end if;
+
+                sim_ready          <= true;   -- kick off the first handshake
+                simulation_started := true;
+
+        -- one integration segment per completed duty-cycle handshake
+        elsif modulation_ready then
             simulation_counter <= simulation_counter + 1;
 
             -------------------------
-            -- small random dither on the duty cycle, same trick as
-            -- fc_4level_tb, keeps the solver from locking onto a perfectly
-            -- periodic orbit and broadens the spectral content.
-            uniform(seed1, seed2, rand);
-            duty := 0.5 + ((rand - 0.5) * 2.0) * 0.002;
-
-            charge_ticks   := to_ticks(t_sw * duty);
-            transfer_ticks := to_ticks(t_sw * (1.0 - duty));
-            period_ticks   := charge_ticks + transfer_ticks;
+            -- The switching period stays the constant period_ticks; only the
+            -- in-cycle charge/transfer split follows p_modulation's
+            -- (dithered) duty, so the period never accumulates rounding
+            -- error and the phases never drift.
+            period_ticks := to_ticks(t_sw);
+            charge_ticks := to_ticks(t_sw * duty);
 
             -- load step half way through the run
             if to_seconds(realtime_ticks) >= 2.0e-3 then
@@ -219,12 +236,14 @@ begin
             if not phases_initialised then
                 for k in 0 to n_phases-1 loop
                     offset := (k * period_ticks) / n_phases;
+                    -- cycle_start holds this phase's next cycle boundary
+                    cycle_start(k) := period_ticks - offset;
                     if offset < charge_ticks then
                         sw_state(k)  := '0';
-                        next_edge(k) := charge_ticks - offset;
+                        next_edge(k) := charge_ticks - offset;   -- '0'->'1' edge
                     else
                         sw_state(k)  := '1';
-                        next_edge(k) := period_ticks - offset;
+                        next_edge(k) := cycle_start(k);          -- '1'->'0' edge
                     end if;
                 end loop;
                 phases_initialised := true;
@@ -270,18 +289,46 @@ begin
             for k in 0 to n_phases-1 loop
                 if now_ticks >= next_edge(k) then
                     if sw_state(k) = '0' then
+                        -- charge -> transfer; transfer holds to the fixed cycle boundary
                         sw_state(k)  := '1';
-                        next_edge(k) := next_edge(k) + transfer_ticks;
+                        next_edge(k) := cycle_start(k);
                     else
-                        sw_state(k)  := '0';
-                        next_edge(k) := next_edge(k) + charge_ticks;
+                        -- transfer -> charge: new cycle, advance the grid by one period
+                        sw_state(k)    := '0';
+                        next_edge(k)   := cycle_start(k) + charge_ticks;
+                        cycle_start(k) := cycle_start(k) + period_ticks;
                     end if;
                 end if;
             end loop;
 
             realtime_ticks <= now_ticks;
 
+            -- segment done: ask p_modulation for the next duty
+            sim_ready <= true;
+
+            end if; -- handshake
         end if; -- rising_edge
     end process stimulus;
+------------------------------------------------------------------------
+    -- Duty-cycle modulator : the duty command in its own process so it can
+    -- be produced independently (a control loop, a schedule, ...). Runs only
+    -- when stimulus pulses sim_ready, and pulses modulation_ready when the
+    -- new duty is ready. Here it is just base_duty with a small dither
+    -- (spectral-broadening trick from fc_4level_tb).
+    p_modulation : process(simulator_clock)
+        variable seed1 : positive := 7;
+        variable seed2 : positive := 13;
+        variable rand  : real;
+    begin
+        if rising_edge(simulator_clock) then
+            modulation_ready <= false;   -- default: single-cycle pulse
+
+            if sim_ready then
+                uniform(seed1, seed2, rand);
+                duty <= base_duty + ((rand - 0.5) * 2.0) * 0.002;
+                modulation_ready <= true;
+            end if;
+        end if;
+    end process p_modulation;
 ------------------------------------------------------------------------
 end vunit_simulation;

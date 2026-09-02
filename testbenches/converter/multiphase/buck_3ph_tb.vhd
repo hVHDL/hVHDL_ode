@@ -59,7 +59,8 @@ architecture vunit_simulation of buck_3ph_tb is
     -- Time is kept as an integer number of ticks. One tick lasts
     -- minimum_time_step seconds; convert to real seconds only where one is
     -- genuinely needed (the rk5 step size and the plot file).
-    constant minimum_time_step : real := 1.0e-9;   -- 1 ns per integer time tick
+    constant modulator_frequency : real := 125.0e6;
+    constant minimum_time_step : real := 1.0/modulator_frequency;   -- 1 ns per integer time tick
 
     function to_seconds(ticks : integer) return real is
     begin
@@ -71,7 +72,7 @@ architecture vunit_simulation of buck_3ph_tb is
         return natural(round(seconds / minimum_time_step));
     end function;
 
-    constant stoptime       : real    := 4.0e-3;
+    constant stoptime       : real    := 500.0e-3;
     constant stoptime_ticks : natural := to_ticks(stoptime);
 
     signal realtime_ticks : natural := 0;
@@ -174,8 +175,12 @@ begin
         file file_handler : text open write_mode is "buck_3ph_tb.dat";
 
         variable on_ticks      : tick_array := (others => 0);
-        variable off_ticks     : tick_array := (others => 0);
-        variable period_ticks  : natural := 0;   -- nominal switching period, for the phase stagger
+        -- start tick of each phase's *next* switching cycle. Edges are
+        -- scheduled off this fixed grid, so a phase's period is always
+        -- exactly period_ticks regardless of duty dither and the phases
+        -- never drift relative to each other.
+        variable cycle_start   : tick_array := (others => 0);
+        variable period_ticks  : natural := 0;   -- fixed switching period in ticks
         variable offset        : natural := 0;
         variable target_ticks  : natural := 0;
         variable segment_ticks : natural := 0;
@@ -224,12 +229,14 @@ begin
             simulation_counter <= simulation_counter + 1;
 
             -------------------------
-            -- per-phase on/off times from the modulator's duty commands
-            for k in 0 to n_phases-1 loop
-                on_ticks(k)  := to_ticks(t_sw * phase_duty(k));
-                off_ticks(k) := to_ticks(t_sw * (1.0 - phase_duty(k)));
-            end loop;
+            -- per-phase high-side on-time from the modulator's duty command.
+            -- The switching period is the constant period_ticks; only the
+            -- in-cycle on/off split follows the (dithered) duty, so the
+            -- period never accumulates rounding error.
             period_ticks := to_ticks(t_sw);
+            for k in 0 to n_phases-1 loop
+                on_ticks(k) := to_ticks(t_sw * phase_duty(k));
+            end loop;
 
             -- load step half way through the run
             if to_seconds(realtime_ticks) >= 2.0e-3 then
@@ -240,12 +247,14 @@ begin
             if not phases_initialised then
                 for k in 0 to n_phases-1 loop
                     offset := (k * period_ticks) / n_phases;
+                    -- cycle_start holds this phase's next cycle boundary
+                    cycle_start(k) := period_ticks - offset;
                     if offset < on_ticks(k) then
                         sw_state(k)  := '1';
-                        next_edge(k) := on_ticks(k) - offset;
+                        next_edge(k) := on_ticks(k) - offset;   -- '1'->'0' edge
                     else
                         sw_state(k)  := '0';
-                        next_edge(k) := period_ticks - offset;
+                        next_edge(k) := cycle_start(k);         -- '0'->'1' edge
                     end if;
                 end loop;
                 phases_initialised := true;
@@ -291,11 +300,14 @@ begin
             for k in 0 to n_phases-1 loop
                 if now_ticks >= next_edge(k) then
                     if sw_state(k) = '1' then
+                        -- high-side off; low-side holds until the fixed cycle boundary
                         sw_state(k)  := '0';
-                        next_edge(k) := next_edge(k) + off_ticks(k);
+                        next_edge(k) := cycle_start(k);
                     else
-                        sw_state(k)  := '1';
-                        next_edge(k) := next_edge(k) + on_ticks(k);
+                        -- new cycle: advance the grid by exactly one period
+                        sw_state(k)    := '1';
+                        next_edge(k)   := cycle_start(k) + on_ticks(k);
+                        cycle_start(k) := cycle_start(k) + period_ticks;
                     end if;
                 end if;
             end loop;
