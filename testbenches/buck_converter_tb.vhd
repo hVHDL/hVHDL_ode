@@ -41,8 +41,25 @@ architecture vunit_simulation of buck_converter_tb is
     -----------------------------------
     -- simulation specific signals ----
 
-    signal realtime : real := 0.0;
-    constant stoptime : real := 4.0e-3;
+    -- Time is kept as an integer number of ticks. One tick lasts
+    -- minimum_time_step seconds; convert to real seconds only where one is
+    -- genuinely needed (the rk5 step size and the plot file).
+    constant minimum_time_step : real := 1.0e-9;   -- 1 ns per integer time tick
+
+    function to_seconds(ticks : integer) return real is
+    begin
+        return real(ticks) * minimum_time_step;
+    end function;
+
+    function to_ticks(seconds : real) return natural is
+    begin
+        return natural(round(seconds / minimum_time_step));
+    end function;
+
+    constant stoptime       : real    := 4.0e-3;
+    constant stoptime_ticks : natural := to_ticks(stoptime);
+
+    signal realtime_ticks : natural := 0;
 
     ----------------------
     -- half-bridge modulator : 1.0 while the switch node is tied to the
@@ -66,7 +83,7 @@ begin
     simtime : process
     begin
         test_runner_setup(runner, runner_cfg);
-        wait until realtime >= stoptime;
+        wait until realtime_ticks >= stoptime_ticks;
         test_runner_cleanup(runner); -- Simulation ends here
         wait;
     end process simtime;
@@ -145,10 +162,11 @@ begin
 
         file file_handler : text open write_mode is "buck_converter_tb.dat";
 
-        variable interval_length : real := 0.0;
-        variable substeps        : positive := 1;
-        variable h               : real := 0.0;
-        variable t_now           : real := 0.0;
+        variable substeps       : positive := 1;
+        variable interval_ticks : natural  := 0;
+        variable step_ticks     : natural  := 1;
+        variable now_ticks      : natural  := 0;
+        variable h              : real     := 0.0;   -- rk5 step size, seconds
 
     begin
         if rising_edge(simulator_clock) then
@@ -185,30 +203,35 @@ begin
             duty := 0.5 + rand;
 
             -- load step half way through the run
-            if realtime >= 2.0e-3 then
+            if to_seconds(realtime_ticks) >= 2.0e-3 then
                 rload := 3.0;
             end if;
 
-            -- integrate the conduction interval as N equal rk5 steps,
-            -- logging a sample before each one.
-            interval_length := get_interval_length;
-            substeps        := get_substeps;
-            h               := interval_length / real(substeps);
-            t_now           := realtime;
+            -- quantise the conduction interval to an integer number of
+            -- ticks, then integrate it as N equal rk5 steps, logging a
+            -- sample before each one.
+            interval_ticks := to_ticks(get_interval_length);
+            substeps       := get_substeps;
+            step_ticks     := interval_ticks / substeps;   -- integer ticks per rk5 step
+            if step_ticks < 1 then
+                step_ticks := 1;
+            end if;
+            h              := to_seconds(step_ticks);
+            now_ticks      := realtime_ticks;
 
             for step in 1 to substeps loop
-                write_to(file_handler,(t_now
+                write_to(file_handler,(to_seconds(now_ticks)
                         , buck_rk5(0)                          -- T_i0 : inductor current
                         , hb_modulator(sw_state) * udc         -- B_u0 : switch-node voltage
                         , buck_rk5(1)                          -- B_u1 : output voltage
                         , udc                                 -- B_u2 : input voltage
                     ));
 
-                rk5(t_now, buck_rk5, h);
-                t_now := t_now + h;
+                rk5(to_seconds(now_ticks), buck_rk5, h);
+                now_ticks := now_ticks + step_ticks;
             end loop;
 
-            realtime <= realtime + interval_length;
+            realtime_ticks <= now_ticks;
 
             -- advance to the other half of the switching period
             if sw_state = '1' then
