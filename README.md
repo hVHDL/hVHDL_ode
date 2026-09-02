@@ -7,6 +7,10 @@ that use them for the plant simulation.
 Developed and tested with the open-source [NVC](https://www.nickg.me.uk/nvc/)
 simulator, driven by [VUnit](https://vunit.github.io/).
 
+The `testbenches/converter/` switching models, the reorganization, and the
+`test_plot.py` plotting helpers were written with [Claude Code](https://claude.com/claude-code)
+(Claude Sonnet 5); see the co-authored commits.
+
 ## Layout
 
 ```
