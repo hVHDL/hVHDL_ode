@@ -28,5 +28,7 @@ ode.add_source_files(ROOT / "testbenches/template_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/fc_4level_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/fc_4level_freq_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/fc_5level_tb.vhd")
+ode.add_source_files(ROOT / "testbenches/buck_converter_tb.vhd")
+ode.add_source_files(ROOT / "testbenches/boost_converter_tb.vhd")
 
 VU.main()

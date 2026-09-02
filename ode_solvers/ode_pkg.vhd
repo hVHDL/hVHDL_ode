@@ -185,19 +185,6 @@ package body ode_pkg is
             + k(6) * dop7(5)
             ) * stepsize;
 
-        -- k(7) := deriv(t + stepsize, y_n1);
-        -- z := k(7);
-
-        -- vErr := y_n1 - z;
-        -- vErr := 
-        --     ( k(1) * (dop8(0) - dop7(0))
-        --     + k(2) * (dop8(1) - dop7(1))
-        --     + k(3) * (dop8(2) - dop7(2))
-        --     + k(4) * (dop8(3) - dop7(3))
-        --     + k(5) * (dop8(4) - dop7(4))
-        --     + k(6) * (dop8(5) - dop7(5))
-        --     + k(7) *  dop8(6)
-        --     ) * stepsize;
     end generic_rk5;
 ------------------------------------------
     procedure am2_generic

@@ -29,7 +29,13 @@ def read_plot_config(filename):
     # <prefix>_title, <prefix>_ylabel (e.g. T_title, B_ylabel),
     # label_<column_name> to rename a signal's legend entry
     # (e.g. label_T_i0=Inductor current (A)), xlim/T_ylim/B_ylim for the
-    # time-domain plot, freq_pair_<name>, freq_fs, freq_nperseg (or
+    # time-domain plot, drawstyle / <prefix>_drawstyle / drawstyle_<column>
+    # to draw signals with a stepped line instead of straight interpolation
+    # (e.g. drawstyle_B_u0=steps-post makes a switch-node voltage look
+    # square even with one sample per conduction interval; accepts
+    # step/steps/square as aliases for steps-post, or any matplotlib
+    # drawstyle: default, steps-pre, steps-post, steps-mid),
+    # freq_pair_<name>, freq_fs, freq_nperseg (or
     # freq_num_windows to split the data into N segments instead of
     # specifying segment length directly), freq_xlim, mag_ylim, phase_ylim,
     # freq_title, freq_unwrap_phase=true, freq_save_<name>=<path> to save
@@ -108,25 +114,50 @@ def parse_limit_pair(config, key):
         print(f"Warning: {key} must be 'low,high', got '{config[key]}'. Ignoring.")
         return None
 
+DRAWSTYLE_ALIASES = {
+    "step": "steps-post",
+    "steps": "steps-post",
+    "square": "steps-post",
+    "line": "default",
+    "": "default",
+}
+
+def normalize_drawstyle(value):
+    v = str(value).strip().lower()
+    return DRAWSTYLE_ALIASES.get(v, v)
+
+def resolve_drawstyle(config, prefix, col):
+    # Priority: per-column > per-subplot (T_/B_) > global. A stepped line
+    # keeps a switching waveform square when there is only one sample per
+    # conduction interval instead of ramping between samples.
+    for key in (f"drawstyle_{col}", f"{prefix}_drawstyle", "drawstyle"):
+        if key in config:
+            return normalize_drawstyle(config[key])
+    return "default"
+
 def plot_time_domain(loaded, config, signal_labels, ax_top, ax_bottom):
+    subplots = (
+        (ax_top, "T", "T_title", "T_ylabel", "Top Data Plot", "Top Data Values"),
+        (ax_bottom, "B", "B_title", "B_ylabel", "Bottom Data Plot", "Bottom Data Values"),
+    )
     for filename, df in loaded:
-        # Split columns into top and bottom based on the prefix
-        top_columns = [col for col in df.columns if col.startswith("T_")]
-        bottom_columns = [col for col in df.columns if col.startswith("B_")]
+        for ax, prefix, title_key, ylabel_key, default_title, default_ylabel in subplots:
+            columns = [col for col in df.columns if col.startswith(prefix + "_")]
+            if not columns:
+                continue
+            time = df.index.to_numpy()
+            for col in columns:
+                label = signal_labels.get(col, col)
+                if len(loaded) > 1:
+                    label = f"{label} ({filename})"
+                ax.plot(time, df[col].to_numpy(), label=label,
+                        drawstyle=resolve_drawstyle(config, prefix, col))
+            ax.set_title(config.get(title_key, default_title))
+            ax.set_ylabel(config.get(ylabel_key, default_ylabel))
+            ax.grid(True)
+            ax.legend()
 
-        # Plot top columns
-        if top_columns:
-            df[top_columns].rename(columns=signal_labels).plot(ax=ax_top, title=config.get("T_title", "Top Data Plot"), legend=True)
-            ax_top.set_ylabel(config.get("T_ylabel", "Top Data Values"))
-            ax_top.set_xlabel("")
-            ax_top.grid(True)
-
-        # Plot bottom columns
-        if bottom_columns:
-            df[bottom_columns].rename(columns=signal_labels).plot(ax=ax_bottom, title=config.get("B_title", "Bottom Data Plot"), legend=True)
-            ax_bottom.set_ylabel(config.get("B_ylabel", "Bottom Data Values"))
-            ax_bottom.grid(True)
-
+    ax_top.set_xlabel("")
     ax_bottom.set_xlabel(config.get("xlabel", "Time"))
 
     xlim = parse_limit_pair(config, "xlim")
@@ -325,6 +356,14 @@ if __name__ == "__main__":
                               "freq_save_NAME config, but set from the command line instead.")
     parser.add_argument("--freq-only", action="store_true",
                          help="Skip the time-domain plot and show only the frequency response.")
+    parser.add_argument("--drawstyle", action="append", default=[], metavar="[COL=]STYLE",
+                         help="Draw time-domain signals stepped instead of interpolated. STYLE is a "
+                              "matplotlib drawstyle (steps-post, steps-pre, steps-mid, default) or an "
+                              "alias (step/steps/square -> steps-post). 'COL=STYLE' targets one column "
+                              "(e.g. B_u0=steps-post), 'T_=STYLE' a whole subplot, plain 'STYLE' all "
+                              "of them. Repeatable. Same effect as the testbench's drawstyle* config.")
+    parser.add_argument("--step", dest="drawstyle", action="append_const", const="steps-post",
+                         help="Shorthand for --drawstyle steps-post (square switching waveforms).")
     parser.add_argument("--freq-pair", action="append", default=[], metavar="NAME=X_COL,Y_COL",
                          help="Add a frequency response pair from X_COL to Y_COL (repeatable). Same "
                               "effect as the testbench's freq_pair_NAME config, but set from the "
@@ -351,5 +390,18 @@ if __name__ == "__main__":
 
     if args.freq_fs:
         config_overrides["freq_fs"] = args.freq_fs
+
+    for item in args.drawstyle:
+        if "=" in item:
+            target, style = item.split("=", 1)
+            target = target.strip()
+            # "T_=" / "B_=" -> subplot key T_drawstyle / B_drawstyle,
+            # anything else -> per-column key drawstyle_<col>
+            if target in ("T_", "B_"):
+                config_overrides[f"{target}drawstyle"] = style.strip()
+            else:
+                config_overrides[f"drawstyle_{target}"] = style.strip()
+        else:
+            config_overrides["drawstyle"] = item.strip()
 
     plot_data(args.filenames, config_overrides, freq_only=args.freq_only)
