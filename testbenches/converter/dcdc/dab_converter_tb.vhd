@@ -7,17 +7,26 @@
 -- row to use (power direction), and the stimulus process just walks the
 -- matrix, integrating each sub-interval with a fixed-step rk5.
 --
---   Vdc1 --+--[Pa]--+       +--[Sa]--+-- + Vdc2 --+--- load
---          |        |  Lk,R |        |            |
---        [Pa']    a o--~~~~--o b    [Sa']         C2
---          |        | 1 : n  |        |            |
---   0V   --+--[Pb]--+       +--[Sb]--+---- 0V -----+
---          primary FB       secondary FB
+--   Vdc1 -+-[Pa]-+   Lk1,R1   m   Lk2,R2   +-[Sa]-+- + Vdc2 -+- load
+--         |      | a o-~~~~-+-o-+-~~~~-o b  |      |          |
+--       [Pa']    |          |Lmag        [Sa']     C2
+--         |      |          |Rmag          |       |          |
+--   0V  --+-[Pb]-+          0V           +-[Sb]----+--- 0V ---+
+--         primary FB                     secondary FB
+--
+-- The transformer is a T model : the leakage is split into Lk1 (primary)
+-- and Lk2 (secondary, primary-referred) with the magnetizing branch
+-- Lmag,Rmag from the midpoint node m to ground. All three inductor
+-- currents are state variables (i1, i2, im) and the midpoint voltage vm is
+-- solved algebraically each derivative evaluation from KCL at m
+-- (i1 = i2 + im  =>  d/dt(i1 - i2 - im) = 0), the same way the 3-phase LC
+-- models solve the floating-neutral voltage : it is get_neutral_voltage()
+-- from lcr_models_pkg applied to (branch source / branch inductance).
 --
 -- Both bridges run 50 % square waves; the secondary is phase-shifted by
--- phi relative to the primary. Power P ~ (n*Vdc1*Vdc2)/(2*fsw*Lk) * d*(1-d)
--- with d = phi / (Tsw/2) the phase-shift fraction, sign(d) = power
--- direction. A PI loop in p_modulation sets d to regulate Vdc2.
+-- phi relative to the primary. Power P ~ (n*Vdc1*Vdc2)/(2*fsw*(Lk1+Lk2))
+-- * d*(1-d) with d = phi / (Tsw/2) the phase-shift fraction, sign(d) =
+-- power direction. A PI loop in p_modulation sets d to regulate Vdc2.
 --
 -- SPS period, four sub-intervals (forward power, d > 0) :
 --   [0, phi)        sp=+1 ss=-1   dur d*(Tsw/2)
@@ -25,8 +34,10 @@
 --   [Tsw/2, +phi)   sp=-1 ss=+1   dur d*(Tsw/2)
 --   [.., Tsw)       sp=-1 ss=-1   dur (1-d)*(Tsw/2)
 --
--- state vector : (0 => iLk (transformer current, primary-referred)
---                 1 => Vdc2 (secondary DC-link voltage))
+-- state vector : (0 => i1  primary  leakage current
+--                 1 => i2  secondary leakage current (primary-referred)
+--                 2 => im  magnetizing current
+--                 3 => Vdc2 secondary DC-link voltage)
 ----------------------------------
 LIBRARY ieee  ;
     USE ieee.NUMERIC_STD.all  ;
@@ -40,6 +51,7 @@ context vunit_lib.vunit_context;
     LIBRARY ode;
     use ode.write_pkg.all;
     use ode.ode_pkg.all;
+    use ode.lcr_models_pkg.all;   -- get_neutral_voltage() for the T-model midpoint
 
 entity dab_converter_tb is
   generic (runner_cfg : string);
@@ -132,16 +144,26 @@ begin
 
     stimulus : process(simulator_clock)
 
-        constant lk    : real := 25.0e-6;    -- transformer leakage inductance (primary-referred)
-        constant rwind : real := 100.0e-3;   -- winding resistance
+        -- transformer T model (primary-referred)
+        constant lk1   : real := 12.0e-6;    -- primary leakage inductance
+        constant lk2   : real := 13.0e-6;    -- secondary leakage inductance
+        constant lmag  : real := 2.0e-3;     -- magnetizing inductance (midpoint to ground)
+        constant r1    : real := 50.0e-3;    -- primary winding resistance
+        constant r2    : real := 50.0e-3;    -- secondary winding resistance
+        -- lumped magnetizing-branch resistance (core loss + winding); also
+        -- sets the flux-balancing time constant Lmag/Rmag ~ 2 ms so any
+        -- magnetizing DC offset from a transient decays within the run
+        constant rmag  : real := 1.0;
+
         constant c2    : real := 100.0e-6;   -- secondary DC-link capacitance
         variable rload : real := 40.0;       -- secondary load resistance
 
         -- each sub-interval is integrated as this many equal rk5 steps
         constant steps_per_segment : positive := 2;
 
-        -- iLk, Vdc2. Output cap starts pre-charged to the setpoint.
-        constant init_state_vector : real_vector(0 to 1) := (0 => 0.0, 1 => vref);
+        -- (i1, i2, im, Vdc2). Output cap starts pre-charged to the setpoint.
+        constant init_state_vector : real_vector(0 to 3) :=
+            (0 => 0.0, 1 => 0.0, 2 => 0.0, 3 => vref);
 
         type sw_array is array (0 to n_legs-1) of bit;
 
@@ -172,14 +194,28 @@ begin
             variable retval  : states'subtype := (others => 0.0);
             variable v_p     : real;
             variable v_s_pri : real;   -- secondary bridge voltage, primary-referred
-            alias iLk  is states(0);
-            alias vdc2 is states(1);
+            variable vm      : real;   -- T-model midpoint node voltage
+            variable ubranch : real_vector(1 to 3);
+            constant lbranch : real_vector(1 to 3) := (lk1, lk2, lmag);
+            alias i1   is states(0);
+            alias i2   is states(1);
+            alias im   is states(2);
+            alias vdc2 is states(3);
         begin
             v_p     := sp * vdc1;
             v_s_pri := ss * n_turns * vdc2;
 
-            retval(0) := (v_p - v_s_pri - iLk*rwind) / lk;              -- d(iLk)/dt
-            retval(1) := (n_turns*ss*iLk - vdc2/rload) / c2;            -- d(Vdc2)/dt
+            -- solve the midpoint voltage vm from KCL at m : the three branch
+            -- currents must satisfy d/dt(i1 - i2 - im) = 0, giving
+            --   vm = (u1/Lk1 + u2/Lk2 + u3/Lmag) / (1/Lk1 + 1/Lk2 + 1/Lmag)
+            -- where u_k is each branch's driving voltage toward m.
+            ubranch := (v_p - i1*r1, v_s_pri + i2*r2, im*rmag);
+            vm := get_neutral_voltage(ubranch, lbranch);
+
+            retval(0) := (v_p - vm - i1*r1)     / lk1;              -- d(i1)/dt   primary leakage
+            retval(1) := (vm - v_s_pri - i2*r2) / lk2;              -- d(i2)/dt   secondary leakage
+            retval(2) := (vm - im*rmag)         / lmag;             -- d(im)/dt   magnetizing
+            retval(3) := (n_turns*ss*i2 - vdc2/rload) / c2;         -- d(Vdc2)/dt
 
             return retval;
         end function;
@@ -200,12 +236,14 @@ begin
             sim_ready <= false;   -- default: sim_ready is a single-cycle pulse
 
             if not simulation_started then
-                write_plot_config(file_handler, "title", "Dual-active-bridge, single-phase-shift");
-                write_plot_config(file_handler, "T_title", "Transformer (leakage) current");
+                write_plot_config(file_handler, "title", "Dual-active-bridge, single-phase-shift, T-model transformer");
+                write_plot_config(file_handler, "T_title", "Transformer branch currents (T model)");
                 write_plot_config(file_handler, "T_ylabel", "Current [A]");
                 write_plot_config(file_handler, "B_title", "Bridge voltages and secondary DC link");
                 write_plot_config(file_handler, "B_ylabel", "Voltage [V]");
-                write_plot_config(file_handler, "label_T_i0", "Transformer current (primary-referred)");
+                write_plot_config(file_handler, "label_T_i0", "Primary leakage current i1");
+                write_plot_config(file_handler, "label_T_i1", "Secondary leakage current i2");
+                write_plot_config(file_handler, "label_T_i2", "Magnetizing current im");
                 write_plot_config(file_handler, "label_B_u0", "Primary bridge voltage");
                 write_plot_config(file_handler, "label_B_u1", "Secondary bridge voltage (primary-referred)");
                 write_plot_config(file_handler, "label_B_u2", "Secondary DC-link voltage");
@@ -216,6 +254,8 @@ begin
 
                 init_simfile(file_handler, ("time"
                 ,"T_i0"
+                ,"T_i1"
+                ,"T_i2"
                 ,"B_u0"
                 ,"B_u1"
                 ,"B_u2"
@@ -235,7 +275,7 @@ begin
             if seg_index = 0 then
                 cur_dir := dab_dir;
                 cur_seg := dab_seg_ticks;
-                vout    <= dab_rk5(1);
+                vout    <= dab_rk5(3);
             end if;
 
             -- switch state for this sub-interval, straight from the matrix
@@ -262,10 +302,12 @@ begin
 
             for s in 1 to steps_per_segment loop
                 write_to(file_handler,(to_seconds(now_ticks)
-                        , dab_rk5(0)                     -- T_i0 : transformer current
+                        , dab_rk5(0)                     -- T_i0 : primary leakage current i1
+                        , dab_rk5(1)                     -- T_i1 : secondary leakage current i2
+                        , dab_rk5(2)                     -- T_i2 : magnetizing current im
                         , sp * vdc1                      -- B_u0 : primary bridge voltage
-                        , ss * n_turns * dab_rk5(1)      -- B_u1 : secondary bridge voltage (pri-ref)
-                        , dab_rk5(1)                     -- B_u2 : secondary DC-link voltage
+                        , ss * n_turns * dab_rk5(3)      -- B_u1 : secondary bridge voltage (pri-ref)
+                        , dab_rk5(3)                     -- B_u2 : secondary DC-link voltage
                         , vref                           -- B_u3 : setpoint
                     ));
 
