@@ -4,11 +4,19 @@
 -- Split into two processes like the other converter testbenches :
 --   stimulus     - integrates the LCR + flying-cap plant with a fixed-step
 --                  rk5, one switch sub-interval per handshake, and feeds
---                  the inductor current back to the modulator.
+--                  the inductor current and the three flying-cap voltages
+--                  back to the modulator.
 --   p_modulation - from the modulator reference picks the row of
---                  fc_5_sw_matrix and the sub-interval length, and carries
---                  the (currently disabled, fc_kp = fc_ki = 0)
---                  current-sharing correction.
+--                  fc_5_sw_matrix and computes a switching time
+--                  *separately for each of the 8 states* in the sequence :
+--                  the nominal level dwell plus a per-cell trim that
+--                  lengthens the states draining an over-charged flying
+--                  cap and shortens the ones charging it. fc_modulator
+--                  sums to zero over the sequence for every cell, so the
+--                  level average and the sequence period are unchanged.
+--
+-- A flying-cap disturbance at 200 ms exercises that per-state balancing
+-- (it settles far quicker than the topology's own natural balancing).
 ----------------------------------
 LIBRARY ieee  ;
     USE ieee.NUMERIC_STD.all  ;
@@ -54,7 +62,11 @@ architecture vunit_simulation of fc_5level_tb is
     signal udc_sig      : real      := initial_dc_link;
     signal mod_ref      : real      := 0.0;
     -- stimulus -> p_modulation
-    signal il_meas      : real      := 0.0;
+    signal il_meas      : real         := 0.0;
+    signal fc_meas      : real_vector(0 to 2) :=
+        (0 => initial_dc_link*1.0/4.0,
+         1 => initial_dc_link*2.0/4.0,
+         2 => initial_dc_link*3.0/4.0);
 
     ----------------------
     function fc_modulator(gate_signals : bit_vector) return real is
@@ -109,11 +121,6 @@ architecture vunit_simulation of fc_5level_tb is
             return t_sw * (1.0 - duty);
         end if;
     end get_next_step_length;
-    ----------------------
-    function sign(a : real) return real is
-    begin
-        if a >= 0.0 then return 1.0; else return -1.0; end if;
-    end sign;
     ----------------------
 
 begin
@@ -215,7 +222,16 @@ begin
 
             rk5(realtime, lcr_rk5, steplen);
             realtime <= realtime + steplen;
-            il_meas  <= lcr_rk5(0);
+            il_meas    <= lcr_rk5(0);
+            fc_meas(0) <= lcr_rk5(2);
+            fc_meas(1) <= lcr_rk5(3);
+            fc_meas(2) <= lcr_rk5(4);
+
+            -- flying-cap disturbance : bump cell 2 off its udc/2 setpoint
+            -- so the per-state switching times have something to correct
+            if realtime < 200.0e-3 and realtime + steplen >= 200.0e-3 then
+                lcr_rk5(3) := lcr_rk5(3) + 15.0;
+            end if;
 
             sim_ready <= true;
 
@@ -225,21 +241,15 @@ begin
 ------------------------------------------------------------------------
     p_modulation : process(simulator_clock)
 
-        constant voltage_offset : real := initial_dc_link/4.0/2.0;
-        constant fc_kp : real := 0.0;
-        constant fc_ki : real := 0.0;
-        constant pr    : real := 0.0;
+        constant pr           : real := 0.0;
+        constant fc_kt        : real := 1.0e-8;   -- cap error [V] -> per-state time trim [s]
+        constant fc_trim_max  : real := 0.30;     -- trim clamp, as a fraction of t_sw
 
         variable udc  : real := initial_dc_link;
-        variable seed1, seed2 : positive := 1;
-        variable rand : real;
         variable modulator_reference : real := 0.0;
 
         variable level_bits        : bit_vector(3 downto 0) := (others => '0');
         variable ones_in_low_state : natural range 0 to 3 := 0;
-
-        variable avg_current, avg_current_diff : real := 0.0;
-        variable prev_current, prev_avg_current : real := 0.0;
 
         variable pwm     : bit := '1';
         variable fc_duty : real := 0.5;
@@ -254,16 +264,16 @@ begin
             3 => ("1111", "1110", "1111", "1101", "1111", "1011", "1111", "0111"));
         variable next_sw_state : sw_states;
 
-        variable sw_times : real_vector(0 to 7) := (others => 0.0);
+        -- one switching time per state of the 8-state sequence
+        variable sw_times : real_vector(0 to 7) := (others => t_sw*0.5);
+        variable vfc_err  : real_vector(0 to 2) := (others => 0.0);
+        variable trim     : real := 0.0;
 
     begin
         if rising_edge(simulator_clock) then
             modulation_ready <= false;
 
             if sim_ready then
-                uniform(seed1, seed2, rand);
-                rand := ((rand - 0.5) * 2.0) * 1.0;
-
                 modulator_reference := initial_voltage_ref - il_meas*pr;
 
                 -- output voltage level of the reference
@@ -274,43 +284,44 @@ begin
                 if modulator_reference >= udc*3.0/4.0 then level_bits(3) := '1'; end if;
                 ones_in_low_state := number_of_ones(level_bits) - 1;
 
-                -- fed-back inductor current -> average current change
-                avg_current      := il_meas/2.0;
-                avg_current_diff := -(avg_current - prev_avg_current);
-                prev_avg_current := avg_current;
-                prev_current     := il_meas;
+                -- flying-cap voltage errors against the k*udc/4 setpoints
+                for k in 0 to 2 loop
+                    vfc_err(k) := fc_meas(k) - real(k+1)*udc/4.0;
+                end loop;
 
-                -- per-state current-sharing correction (disabled: fc_ki = 0)
-                if state_index mod 2 = 0 then
-                    sw_times(state_index) := -sign(avg_current_diff) * avg_current_diff * fc_ki;
-                    pwm := '1';
-                else
-                    sw_times(state_index) :=  sign(avg_current_diff) * avg_current_diff * fc_ki;
-                    pwm := '0';
-                end if;
-                if sw_times(state_index) <= 0.0 then
-                    sw_times(state_index) := 0.0;
-                end if;
-
-                fc_duty := get_fc_duty(modulator_reference, udc, level_bits);
-                if (ones_in_low_state = 1) or (ones_in_low_state = 2) then
-                    mod_step <= get_next_step_length(t_sw, pwm, fc_duty)
-                                + (avg_current_diff*fc_kp + sw_times(state_index))*t_sw;
-                else
-                    mod_step <= get_next_step_length(t_sw, pwm, fc_duty);
-                end if;
-
+                if state_index mod 2 = 0 then pwm := '1'; else pwm := '0'; end if;
+                fc_duty       := get_fc_duty(modulator_reference, udc, level_bits);
                 next_sw_state := fc_5_sw_matrix(ones_in_low_state)(state_index);
+
+                -- switching time for THIS state : nominal level dwell, then a
+                -- per-cell trim. A cell driven "01" discharges its flying cap
+                -- (positive inductor current), "10" charges it; so lengthen the
+                -- discharging states of an over-charged cap and shorten the
+                -- charging ones. fc_modulator sums to zero over the 8-state
+                -- sequence for every cell -> level average and period hold.
+                sw_times(state_index) := get_next_step_length(t_sw, pwm, fc_duty);
+                for k in 0 to 2 loop
+                    trim := fc_modulator(next_sw_state(k+1 downto k)) * vfc_err(k) * fc_kt;
+                    if    trim >  t_sw*fc_trim_max then trim :=  t_sw*fc_trim_max;
+                    elsif trim < -t_sw*fc_trim_max then trim := -t_sw*fc_trim_max;
+                    end if;
+                    sw_times(state_index) := sw_times(state_index) + trim;
+                end loop;
+                if sw_times(state_index) < t_sw*0.01 then
+                    sw_times(state_index) := t_sw*0.01;
+                end if;
+
+                mod_sw_state     <= next_sw_state;
+                mod_step         <= sw_times(state_index);
+                udc_sig          <= udc;
+                mod_ref          <= modulator_reference;
+                modulation_ready <= true;
+
                 if state_index < 7 then
                     state_index := state_index + 1;
                 else
                     state_index := 0;
                 end if;
-
-                mod_sw_state     <= next_sw_state;
-                udc_sig          <= udc;
-                mod_ref          <= modulator_reference;
-                modulation_ready <= true;
             end if;
         end if;
     end process p_modulation;
