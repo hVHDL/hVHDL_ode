@@ -27,7 +27,7 @@ testbenches/
   lcr_*            LC / LCR filter integration tests (fixed vs adaptive, single- and 3-phase)
   sort_tb, template_tb
   converter/       power-electronic converter switching models
-    multilevel/    fc_4level_tb, fc_4level_freq_tb, fc_5level_tb   (flying-capacitor buck-type)
+    multilevel/    fc_4level_tb, fc_5level_tb                     (flying-capacitor buck-type)
     dcdc/          buck_converter_tb, boost_converter_tb          (synchronous 2-switch)
                    dab_converter_tb, dhb_converter_tb             (dual active [half-]bridge, SPS)
                    llc_converter_tb                               (half-bridge LLC resonant, 400 -> 51 V)
