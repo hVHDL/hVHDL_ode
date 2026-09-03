@@ -212,27 +212,32 @@ begin
             end loop;
         end procedure;
         ----------------------------------------------------------------
+        -- write one plot row for the current real state at tick `tk`
+        procedure log_row(tk : natural) is
+            variable tn : real := to_seconds(tk);
+        begin
+            write_to(file_handler,(tn
+                    , abs(v_pk * sin(2.0*MATH_PI*f_line*tn))                 -- T_i0 : rectified line voltage
+                    , pfc_rk5(0) * 40.0                                      -- T_i1 : inductor current x40
+                    , i_amp_cmd * abs(sin(2.0*MATH_PI*f_line*tn)) * 40.0     -- T_i2 : current reference x40
+                    , pfc_rk5(1)                                             -- B_u0 : output voltage
+                    , vref                                                  -- B_u1 : setpoint
+                ));
+        end procedure;
+        ----------------------------------------------------------------
         -- forward integration of the real state (pfc_rk5), advancing
         -- now_ticks by exactly `dticks` and logging one row per step
         procedure run_logged(dticks : natural; nsub : positive) is
             variable step : natural := 1;
             variable remaining  : natural := dticks;
-            variable tn   : real;
         begin
             if dticks < 1 then return; end if;
             step := dticks / nsub;
             if step < 1 then step := 1; end if;
             while remaining > 0 loop
                 if remaining < step then step := remaining; end if;
-                tn := to_seconds(now_ticks);
-                write_to(file_handler,(tn
-                        , abs(v_pk * sin(2.0*MATH_PI*f_line*tn))                 -- T_i0 : rectified line voltage
-                        , pfc_rk5(0) * 40.0                                      -- T_i1 : inductor current x40
-                        , i_amp_cmd * abs(sin(2.0*MATH_PI*f_line*tn)) * 40.0     -- T_i2 : current reference x40
-                        , pfc_rk5(1)                                             -- B_u0 : output voltage
-                        , vref                                                  -- B_u1 : setpoint
-                    ));
-                rk5(tn, pfc_rk5, to_seconds(step));
+                log_row(now_ticks);
+                rk5(to_seconds(now_ticks), pfc_rk5, to_seconds(step));
                 now_ticks := now_ticks + step;
                 remaining := remaining - step;
             end loop;
@@ -337,8 +342,15 @@ begin
                     run_logged(cond_ticks, steps_per_segment);
                     pfc_rk5(0) := 0.0;   -- snap iL to exactly zero at the crossing
 
-                    -- idle portion : vL = 0, iL = 0, Vout decays into the load
-                    run_logged(idle_ticks, 1);
+                    -- idle portion : vL = 0, iL = 0, Vout decays into the load.
+                    -- Log the two endpoints explicitly so the flat iL = 0
+                    -- segment is drawn for its full length in the plot.
+                    if idle_ticks > 0 then
+                        log_row(now_ticks);                              -- zero crossing
+                        run(pfc_rk5, now_ticks, idle_ticks, 1);          -- decay Vout, iL held at 0
+                        now_ticks := now_ticks + idle_ticks;
+                        log_row(now_ticks);                              -- end of the idle interval
+                    end if;
                 end if;
             end if;
 
