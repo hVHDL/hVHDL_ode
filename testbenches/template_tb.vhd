@@ -116,12 +116,17 @@ begin
 
                 -- bode plot
                 write_plot_config(file_handler, "combined_layout", "true");
-                write_plot_config(file_handler, "freq_unwrap_phase", "true");
+                -- this LCR stage is lightly damped (rl only), so the two
+                -- resonance peaks reach ~+40..+55 dB and above the cutoff the
+                -- capacitor-voltage estimate is mostly noise; keep the phase
+                -- wrapped (unwrap would run that noise off the axis) and give
+                -- the magnitude/phase enough range to show the peaks.
+                -- write_plot_config(file_handler, "freq_unwrap_phase", "true");
                 write_plot_config(file_handler, "freq_fs", real'image(sw_frequency));
                 write_plot_config(file_handler, "freq_num_windows", "5");
                 write_plot_config(file_handler, "freq_xlim", "2e2,100e3");
-                write_plot_config(file_handler, "mag_ylim", "-40,10");
-                write_plot_config(file_handler, "phase_ylim", "-400,100");
+                write_plot_config(file_handler, "mag_ylim", "-60,60");
+                write_plot_config(file_handler, "phase_ylim", "-200,200");
                 write_plot_config(file_handler, "freq_pair_iL", "B_u0,T_i0");
                 write_plot_config(file_handler, "freq_pair_uC", "B_u0,B_u1");
                 write_plot_config(file_handler, "label_iL", "Bridge voltage to inductor current");
