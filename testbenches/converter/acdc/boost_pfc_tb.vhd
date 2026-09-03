@@ -18,6 +18,13 @@
 --   Q off : diL/dt = (v_rect - Vout - iL*RL)/L , iL > 0  (boost diode conducts)
 --           diL/dt = 0                          , iL <= 0 (DCM, diode blocks)
 --
+-- Discontinuous conduction (light load, near the line zero crossings) is
+-- resolved rather than clamped : when a Q-off sub-interval would drive iL
+-- below 0, a short bisection of the off-time (dcm_iters trial integrations
+-- of a state copy) locates the negative-slope length, the real state is
+-- integrated only up to that zero crossing, and iL is then held at 0
+-- (vL = 0, Vout decaying into the load) for the rest of the sub-interval.
+--
 -- Modulation (p_modulation), two nested loops :
 --   outer : slow PI on (Vref - LPF(Vout)) -> line-current amplitude i_amp
 --           (the low-pass keeps the double-line-frequency ripple out of the
@@ -61,7 +68,7 @@ architecture vunit_simulation of boost_pfc_tb is
     -- Time is kept as an integer number of ticks. One tick lasts
     -- minimum_time_step seconds; convert to real seconds only where one is
     -- genuinely needed (the rk5 step size and the plot file).
-    constant minimum_time_step : real := 1.0e-9;   -- 1 ns per integer time tick
+    constant minimum_time_step : real := 10.0e-9;   -- seconds per integer time tick
 
     function to_seconds(ticks : integer) return real is
     begin
@@ -73,7 +80,7 @@ architecture vunit_simulation of boost_pfc_tb is
         return natural(round(seconds / minimum_time_step));
     end function;
 
-    constant stoptime       : real    := 100.0e-3;  -- five line cycles
+    constant stoptime       : real    := 200.0e-3;  -- ten line cycles
     constant stoptime_ticks : natural := to_ticks(stoptime);
 
     signal realtime_ticks : natural := 0;
@@ -121,18 +128,25 @@ begin
 
     stimulus : process(simulator_clock)
 
-        constant l     : real := 2.0e-3;     -- boost inductor
+        constant l     : real := 1.0e-3;     -- boost inductor
         constant rl    : real := 100.0e-3;   -- inductor series resistance
         constant cout  : real := 470.0e-6;   -- output capacitor
-        variable rload : real := 240.0;      -- output load resistance (steps to 190 Ohm)
+        variable rload : real := 940.0;      -- output load resistance (steps to 190 Ohm)
 
         -- each sub-interval is integrated as this many equal rk5 steps
         constant steps_per_segment : positive := 2;
 
+        -- discontinuous-conduction handling : when the Q-off inductor current
+        -- would reach 0 mid sub-interval, bisect the off-time (dcm_iters
+        -- trial integrations) to locate the zero crossing, integrate the real
+        -- state only up to it, then hold iL = 0 (vL = 0) for the remainder.
+        constant dcm_enable : boolean := true;
+        constant dcm_iters  : natural := 12;
+
         -- (iL, Vout). Output cap starts pre-charged to the rectified peak
         -- (the value it reaches through the bridge + boost diode before the
         -- boost stage starts switching).
-        constant init_state_vector : real_vector(0 to 1) := (0 => 0.0, 1 => vref);
+        constant init_state_vector : real_vector(0 to 1) := (0 => 0.0, 1 => 325.0);
 
         -- the "switch matrix" : Q on for sub-interval 0, off for 1
         constant sw_seq : bit_vector(0 to n_segments-1) := "10";
@@ -176,10 +190,54 @@ begin
         file file_handler : text open write_mode is "boost_pfc_tb.dat";
 
         variable seg_ticks  : natural := 0;
-        variable step_ticks : natural := 1;
         variable now_ticks  : natural := 0;
-        variable h          : real    := 0.0;   -- rk5 step size, seconds
-        variable t_now      : real    := 0.0;
+
+        -- DCM zero-crossing search
+        variable trial      : init_state_vector'subtype := init_state_vector;
+        variable f_lo, f_hi, f_mid : real := 0.0;
+        variable cond_ticks, idle_ticks : natural := 0;
+
+        ----------------------------------------------------------------
+        -- silent forward integration of `st` by `dticks` ticks in `nsub`
+        -- equal rk5 steps, starting the line-voltage clock at t0_ticks
+        -- (used for the DCM trial integrations)
+        procedure run(variable st : inout real_vector;
+                      t0_ticks : natural; dticks : natural; nsub : positive) is
+            variable hs : real;
+        begin
+            if dticks < 1 then return; end if;
+            hs := to_seconds(dticks) / real(nsub);
+            for k in 0 to nsub-1 loop
+                rk5(to_seconds(t0_ticks) + real(k)*hs, st, hs);
+            end loop;
+        end procedure;
+        ----------------------------------------------------------------
+        -- forward integration of the real state (pfc_rk5), advancing
+        -- now_ticks by exactly `dticks` and logging one row per step
+        procedure run_logged(dticks : natural; nsub : positive) is
+            variable step : natural := 1;
+            variable remaining  : natural := dticks;
+            variable tn   : real;
+        begin
+            if dticks < 1 then return; end if;
+            step := dticks / nsub;
+            if step < 1 then step := 1; end if;
+            while remaining > 0 loop
+                if remaining < step then step := remaining; end if;
+                tn := to_seconds(now_ticks);
+                write_to(file_handler,(tn
+                        , abs(v_pk * sin(2.0*MATH_PI*f_line*tn))                 -- T_i0 : rectified line voltage
+                        , pfc_rk5(0) * 40.0                                      -- T_i1 : inductor current x40
+                        , i_amp_cmd * abs(sin(2.0*MATH_PI*f_line*tn)) * 40.0     -- T_i2 : current reference x40
+                        , pfc_rk5(1)                                             -- B_u0 : output voltage
+                        , vref                                                  -- B_u1 : setpoint
+                    ));
+                rk5(tn, pfc_rk5, to_seconds(step));
+                now_ticks := now_ticks + step;
+                remaining := remaining - step;
+            end loop;
+        end procedure;
+        ----------------------------------------------------------------
 
     begin
         if rising_edge(simulator_clock) then
@@ -223,7 +281,7 @@ begin
             sw_state := sw_seq(seg_index);
 
             -- load step at mid-run
-            if to_seconds(realtime_ticks) >= 40.0e-3 then
+            if to_seconds(realtime_ticks) >= 100.0e-3 then
                 rload := 190.0;
             end if;
 
@@ -231,32 +289,61 @@ begin
             if seg_ticks < 1 then
                 seg_ticks := 1;
             end if;
-
-            step_ticks := seg_ticks / steps_per_segment;
-            if step_ticks < 1 then
-                step_ticks := 1;
-            end if;
-            h := to_seconds(step_ticks);
             now_ticks := realtime_ticks;
 
-            for s in 1 to steps_per_segment loop
-                t_now := to_seconds(now_ticks);
-                write_to(file_handler,(t_now
-                        , abs(v_pk * sin(2.0*MATH_PI*f_line*t_now))    -- T_i0 : rectified line voltage
-                        , pfc_rk5(0) * 40.0                            -- T_i1 : inductor current (scaled)
-                        , i_amp_cmd * abs(sin(2.0*MATH_PI*f_line*t_now)) * 40.0  -- T_i2 : current reference (scaled)
-                        , pfc_rk5(1)                                   -- B_u0 : output voltage
-                        , vref                                        -- B_u1 : setpoint
-                    ));
+            if (seg_index = 0) or (not dcm_enable) or (pfc_rk5(0) <= 0.0) then
+                -- Q on, or DCM disabled, or the inductor is already idle
+                -- (iL = 0, deriv holds it there and Vout decays) : integrate
+                -- the whole sub-interval directly.
+                run_logged(seg_ticks, steps_per_segment);
+                if pfc_rk5(0) < 0.0 then
+                    pfc_rk5(0) := 0.0;   -- safety clamp
+                end if;
 
-                rk5(t_now, pfc_rk5, h);
-                now_ticks := now_ticks + step_ticks;
-            end loop;
+            else
+                -- Q off with the boost diode conducting : the inductor
+                -- current has a negative slope. Test whether it reaches 0
+                -- within the off-time.
+                trial := pfc_rk5;
+                run(trial, now_ticks, seg_ticks, steps_per_segment);
 
-            -- the boost inductor current cannot go negative (bridge + boost
-            -- diode); clamp any zero-crossing overshoot from the fixed step
+                if trial(0) > 0.0 then
+                    -- stays positive : continuous conduction this period
+                    run_logged(seg_ticks, steps_per_segment);
+                else
+                    -- discontinuous : bisect the off-time for the length of
+                    -- the negative-slope (diode-conducting) sub-interval
+                    f_lo := 0.0;
+                    f_hi := 1.0;
+                    for iter in 1 to dcm_iters loop
+                        f_mid := 0.5*(f_lo + f_hi);
+                        trial := pfc_rk5;
+                        run(trial, now_ticks,
+                            natural(round(real(seg_ticks) * f_mid)), steps_per_segment);
+                        if trial(0) > 0.0 then
+                            f_lo := f_mid;
+                        else
+                            f_hi := f_mid;
+                        end if;
+                    end loop;
+
+                    -- f_lo is the largest tested fraction with iL still > 0
+                    cond_ticks := natural(round(real(seg_ticks) * f_lo));
+                    if cond_ticks < 1         then cond_ticks := 1;         end if;
+                    if cond_ticks > seg_ticks then cond_ticks := seg_ticks; end if;
+                    idle_ticks := seg_ticks - cond_ticks;
+
+                    -- diode-conducting portion, up to the zero crossing
+                    run_logged(cond_ticks, steps_per_segment);
+                    pfc_rk5(0) := 0.0;   -- snap iL to exactly zero at the crossing
+
+                    -- idle portion : vL = 0, iL = 0, Vout decays into the load
+                    run_logged(idle_ticks, 1);
+                end if;
+            end if;
+
             if pfc_rk5(0) < 0.0 then
-                pfc_rk5(0) := 0.0;
+                pfc_rk5(0) := 0.0;   -- the bridge + boost diode block reverse iL
             end if;
 
             realtime_ticks <= now_ticks;
