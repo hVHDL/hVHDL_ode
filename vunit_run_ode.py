@@ -38,5 +38,6 @@ ode.add_source_files(ROOT / "testbenches/converter/multiphase/boost_3ph_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/converter/multiphase/buck_3ph_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/converter/dcac/inverter_3ph_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/converter/dcac/inverter_3ph_svm_tb.vhd")
+ode.add_source_files(ROOT / "testbenches/converter/acdc/boost_pfc_tb.vhd")
 
 VU.main()

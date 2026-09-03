@@ -32,6 +32,7 @@ testbenches/
                    dab_converter_tb, dhb_converter_tb             (dual active [half-]bridge, SPS)
     multiphase/    buck_3ph_tb, boost_3ph_tb                      (3-phase interleaved)
     dcac/          inverter_3ph_tb, inverter_3ph_svm_tb           (3-phase VSI + LC filter)
+    acdc/          boost_pfc_tb                                   (single-phase boost PFC)
 ```
 
 ## Solvers
@@ -78,6 +79,10 @@ Shared conventions in the `converter/` testbenches:
   on the phase-shift fraction regulating the secondary DC-link voltage.
   The transformer is a T model - the three branch currents are states and
   the midpoint voltage is solved algebraically like the 3-phase neutral.
+- `boost_pfc_tb` is a single-phase boost PFC: diode-bridge rectifier +
+  boost stage, with a slow outer voltage PI setting the amplitude of a
+  rectified-sine current reference that an inner current loop tracks
+  (unity power factor, ~2 % THD in the model).
 
 ## Running
 
