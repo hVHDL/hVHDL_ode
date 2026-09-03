@@ -9,22 +9,25 @@
 --
 -- Same as dab_converter_tb but each side is a single half-bridge leg
 -- working against a split-capacitor divider (Cd1a/Cd1b, Cd2a/Cd2b), so the
--- transformer sees a +/-Vdc/2 square wave (half the full-bridge amplitude)
--- and each cap voltage is a state.
+-- transformer sees a +/-Vdc/2 square wave (half the full-bridge amplitude).
+-- The split caps are deliberately small : the output energy store is a
+-- separate capacitor Cout across Vdc2, so the divider midpoints show a
+-- > 20 Vpp swing at full load.
 --
 --   Vdc1 -+--Cd1a--+   Lk1,R1   m   Lk2,R2   +--Cd2a--+- + Vdc2 -+- load
 --         |      M1|            |            |M2      |          |
---        [Ph]------+-a o-~~~~-+-o-+-~~~~-o b--+------[Sh]         R
---        [Pl]      |          |Lmag,Rmag      |      [Sl]         |
---   0V  -+--Cd1b---+          0V              +--Cd2b--+--- 0V ---+
+--        [Ph]------+-a o-~~~~-+-o-+-~~~~-o b--+------[Sh]  Cout    R
+--        [Pl]      |          |Lmag,Rmag      |      [Sl]  |       |
+--   0V  -+--Cd1b---+          0V              +--Cd2b--+---+- 0V --+
 --
---   v_p     = hb_p * vc1a - (1 - hb_p) * vc1b          -> +/- Vdc1/2
---   v_s_pri = n * (hb_s * vc2a - (1 - hb_s) * vc2b)    -> +/- n*Vdc2/2
+--   v_p     = hb_p * vc1a - (1 - hb_p) * vc1b   -> +/- Vdc1/2
+--   v_s_pri = n * (hb_s * Vdc2 - vm2)           -> +/- n*Vdc2/2
 --
 -- A stiff Vdc1 source pins vc1a + vc1b = Vdc1, so on the primary the
 -- transformer current i1 only shifts the midpoint (+/- i1/2 into the two
--- caps). On the secondary vc2a + vc2b = Vdc2 is free : the half-bridge
--- routes n*i2 to Vdc2+ (hs) or 0 (ls) and the load sits across the pair.
+-- caps). On the secondary the half-bridge routes n*i2 to Vdc2+ (hs) or 0
+-- (ls); the rectified part (hb_s - 0.5)*n*i2 charges Cout + load and the
+-- split-cap divider carries the rest, moving only its midpoint vm2.
 --
 -- Transformer T model : leakage split into Lk1 (primary) and Lk2
 -- (secondary, primary-referred) with a magnetizing branch Lmag,Rmag from
@@ -43,10 +46,10 @@
 -- state vector : (0 => i1   primary  leakage current
 --                 1 => i2   secondary leakage current (primary-referred)
 --                 2 => im   magnetizing current
---                 3 => vc1a primary   split cap, Vdc1+ to M1
---                 4 => vc1b primary   split cap, M1 to 0
---                 5 => vc2a secondary split cap, Vdc2+ to M2
---                 6 => vc2b secondary split cap, M2 to 0   (Vdc2 = vc2a + vc2b))
+--                 3 => vc1a primary split cap, Vdc1+ to M1
+--                 4 => vc1b primary split cap, M1 to 0
+--                 5 => Vdc2 secondary output-capacitor voltage
+--                 6 => vm2  secondary split-cap midpoint (M2 to 0))
 ----------------------------------
 LIBRARY ieee  ;
     USE ieee.NUMERIC_STD.all  ;
@@ -163,22 +166,24 @@ begin
         -- sets the flux-balancing time constant Lmag/Rmag ~ 1 ms
         constant rmag  : real := 1.0;
 
-        -- split-capacitor dividers : two caps per half-bridge. On the
-        -- primary a stiff Vdc1 source keeps vc1a + vc1b = Vdc1, so only the
-        -- midpoint moves; on the secondary vc2a + vc2b = Vdc2 is free and
-        -- carries the output (load across the pair).
-        constant cd1   : real := 470.0e-6;   -- each primary split cap
-        constant cd2   : real := 470.0e-6;   -- each secondary split cap
+        -- half-bridge split-capacitor dividers, kept small on purpose so the
+        -- midpoints show a > 20 Vpp swing at full load (~48 A, ~22 Vpp with
+        -- 10 uF). The primary pair is held to vc1a + vc1b = Vdc1 by the
+        -- stiff source; on the secondary the divider only sets the midpoint,
+        -- the output energy store is the separate cout across Vdc2.
+        constant cd1   : real := 10.0e-6;    -- each primary split cap
+        constant cd2   : real := 10.0e-6;    -- each secondary split cap
+        constant cout  : real := 220.0e-6;   -- secondary output capacitor (across Vdc2)
         variable rload : real := 40.0;       -- secondary load resistance
 
         -- each sub-interval is integrated as this many equal rk5 steps
         constant steps_per_segment : positive := 2;
 
-        -- (i1, i2, im, vc1a, vc1b, vc2a, vc2b). Split caps start balanced,
-        -- the secondary pair pre-charged so vc2a + vc2b = vref.
+        -- (i1, i2, im, vc1a, vc1b, Vdc2, vm2). Split caps start balanced,
+        -- the output cap pre-charged to the setpoint.
         constant init_state_vector : real_vector(0 to 6) :=
             (0 => 0.0, 1 => 0.0, 2 => 0.0,
-             3 => vdc1/2.0, 4 => vdc1/2.0, 5 => vref/2.0, 6 => vref/2.0);
+             3 => vdc1/2.0, 4 => vdc1/2.0, 5 => vref, 6 => vref/2.0);
 
         type sw_array is array (0 to n_legs-1) of bit;
 
@@ -210,20 +215,21 @@ begin
             variable v_p     : real;
             variable v_s_pri : real;   -- secondary bridge voltage, primary-referred
             variable vm      : real;   -- T-model midpoint node voltage
-            variable i_load  : real;
+            variable i_sec   : real;   -- secondary transformer current, actual (n*i2)
+            variable dvdc2   : real;
             variable ubranch : real_vector(1 to 3);
             constant lbranch : real_vector(1 to 3) := (lk1, lk2, lmag);
             alias i1   is states(0);
             alias i2   is states(1);
             alias im   is states(2);
-            alias vc1a is states(3);   -- primary   : Vdc1+ to M1
-            alias vc1b is states(4);   -- primary   : M1 to 0
-            alias vc2a is states(5);   -- secondary : Vdc2+ to M2
-            alias vc2b is states(6);   -- secondary : M2 to 0
+            alias vc1a is states(3);   -- primary  split cap : Vdc1+ to M1
+            alias vc1b is states(4);   -- primary  split cap : M1 to 0
+            alias vdc2 is states(5);   -- secondary output-capacitor voltage
+            alias vm2  is states(6);   -- secondary split-cap midpoint (M2 to 0)
         begin
             -- half-bridge output = switch node minus its split-cap midpoint
             v_p     := hb_p * vc1a - (1.0 - hb_p) * vc1b;
-            v_s_pri := n_turns * (hb_s * vc2a - (1.0 - hb_s) * vc2b);
+            v_s_pri := n_turns * (hb_s * vdc2 - vm2);
 
             -- T-model midpoint vm from KCL at m : d/dt(i1 - i2 - im) = 0,
             --   vm = (u1/Lk1 + u2/Lk2 + u3/Lmag) / (1/Lk1 + 1/Lk2 + 1/Lmag)
@@ -239,12 +245,14 @@ begin
             retval(3) := -i1 / (2.0*cd1);                           -- d(vc1a)/dt
             retval(4) :=  i1 / (2.0*cd1);                           -- d(vc1b)/dt
 
-            -- secondary split caps : the transformer current n*i2 is routed
-            -- to Vdc2+ (hs) or 0 (ls) by the secondary half-bridge, the load
-            -- sits across vc2a + vc2b.
-            i_load := (vc2a + vc2b) / rload;
-            retval(5) := (hb_s*n_turns*i2 - i_load)         / cd2;   -- d(vc2a)/dt
-            retval(6) := (-(1.0 - hb_s)*n_turns*i2 - i_load) / cd2;  -- d(vc2b)/dt
+            -- secondary : the half-bridge routes the transformer current to
+            -- Vdc2+ (hs) or 0 (ls). Output cap + load see the rectified
+            -- current (hb_s - 0.5)*i_sec ; the split-cap divider carries the
+            -- rest and only its midpoint vm2 moves.
+            i_sec := n_turns * i2;
+            dvdc2 := ((hb_s - 0.5)*i_sec - vdc2/rload) / (cout + cd2/2.0);
+            retval(5) := dvdc2;                                     -- d(Vdc2)/dt
+            retval(6) := (cd2*dvdc2 - i_sec) / (2.0*cd2);           -- d(vm2)/dt
 
             return retval;
         end function;
@@ -308,7 +316,7 @@ begin
             if seg_index = 0 then
                 cur_dir := dhb_dir;
                 cur_seg := dhb_seg_ticks;
-                vout    <= dhb_rk5(5) + dhb_rk5(6);   -- Vdc2 = vc2a + vc2b
+                vout    <= dhb_rk5(5);   -- Vdc2 (output-capacitor voltage)
             end if;
 
             -- switch state for this sub-interval, straight from the matrix
@@ -339,11 +347,11 @@ begin
                         , dhb_rk5(1)                                                       -- T_i1 : i2
                         , dhb_rk5(2)                                                       -- T_i2 : im
                         , hb_p*dhb_rk5(3) - (1.0-hb_p)*dhb_rk5(4)                          -- B_u0 : primary HB voltage
-                        , n_turns*(hb_s*dhb_rk5(5) - (1.0-hb_s)*dhb_rk5(6))                -- B_u1 : secondary HB voltage (pri-ref)
-                        , dhb_rk5(5) + dhb_rk5(6)                                          -- B_u2 : Vdc2 = vc2a + vc2b
+                        , n_turns*(hb_s*dhb_rk5(5) - dhb_rk5(6))                           -- B_u1 : secondary HB voltage (pri-ref)
+                        , dhb_rk5(5)                                                       -- B_u2 : Vdc2 (output cap)
                         , vref                                                            -- B_u3 : setpoint
                         , dhb_rk5(4)                                                       -- B_u4 : primary split-cap midpoint (vc1b)
-                        , dhb_rk5(6)                                                       -- B_u5 : secondary split-cap midpoint (vc2b)
+                        , dhb_rk5(6)                                                       -- B_u5 : secondary split-cap midpoint (vm2)
                     ));
 
                 rk5(to_seconds(now_ticks), dhb_rk5, h);
