@@ -8,19 +8,23 @@
 -- matrix, integrating each sub-interval with a fixed-step rk5.
 --
 -- Same as dab_converter_tb but each side is a single half-bridge leg
--- working against a split-capacitor divider, so the transformer sees a
--- +/-Vdc/2 square wave (half the full-bridge amplitude). The split-cap
--- midpoints are assumed balanced (large caps), which also makes the
--- applied voltage inherently zero-mean.
+-- working against a split-capacitor divider (Cd1a/Cd1b, Cd2a/Cd2b), so the
+-- transformer sees a +/-Vdc/2 square wave (half the full-bridge amplitude)
+-- and each cap voltage is a state.
 --
---   Vdc1 -+-[Ph]-+   Lk1,R1   m   Lk2,R2   +-[Sh]-+- + Vdc2 -+- load
---        Cd1     | a o-~~~~-+-o-+-~~~~-o b  |     Cd2         |
---         +--M1--+          |Lmag,Rmag      +--M2--+          C2
---        Cd1     |          |               |     Cd2         |
---   0V  -+-[Pl]--+          0V            +-[Sl]---+--- 0V ----+
+--   Vdc1 -+--Cd1a--+   Lk1,R1   m   Lk2,R2   +--Cd2a--+- + Vdc2 -+- load
+--         |      M1|            |            |M2      |          |
+--        [Ph]------+-a o-~~~~-+-o-+-~~~~-o b--+------[Sh]         R
+--        [Pl]      |          |Lmag,Rmag      |      [Sl]         |
+--   0V  -+--Cd1b---+          0V              +--Cd2b--+--- 0V ---+
 --
--- v_p     = (hb_modulator(p) - 0.5) * Vdc1        -> +/- Vdc1/2
--- v_s_pri = (hb_modulator(s) - 0.5) * n * Vdc2    -> +/- n*Vdc2/2
+--   v_p     = hb_p * vc1a - (1 - hb_p) * vc1b          -> +/- Vdc1/2
+--   v_s_pri = n * (hb_s * vc2a - (1 - hb_s) * vc2b)    -> +/- n*Vdc2/2
+--
+-- A stiff Vdc1 source pins vc1a + vc1b = Vdc1, so on the primary the
+-- transformer current i1 only shifts the midpoint (+/- i1/2 into the two
+-- caps). On the secondary vc2a + vc2b = Vdc2 is free : the half-bridge
+-- routes n*i2 to Vdc2+ (hs) or 0 (ls) and the load sits across the pair.
 --
 -- Transformer T model : leakage split into Lk1 (primary) and Lk2
 -- (secondary, primary-referred) with a magnetizing branch Lmag,Rmag from
@@ -36,10 +40,13 @@
 --   [Tsw/2, +phi)   p=- s=+   dur d*(Tsw/2)
 --   [.., Tsw)       p=- s=-   dur (1-d)*(Tsw/2)
 --
--- state vector : (0 => i1  primary  leakage current
---                 1 => i2  secondary leakage current (primary-referred)
---                 2 => im  magnetizing current
---                 3 => Vdc2 secondary DC-link voltage)
+-- state vector : (0 => i1   primary  leakage current
+--                 1 => i2   secondary leakage current (primary-referred)
+--                 2 => im   magnetizing current
+--                 3 => vc1a primary   split cap, Vdc1+ to M1
+--                 4 => vc1b primary   split cap, M1 to 0
+--                 5 => vc2a secondary split cap, Vdc2+ to M2
+--                 6 => vc2b secondary split cap, M2 to 0   (Vdc2 = vc2a + vc2b))
 ----------------------------------
 LIBRARY ieee  ;
     USE ieee.NUMERIC_STD.all  ;
@@ -156,15 +163,22 @@ begin
         -- sets the flux-balancing time constant Lmag/Rmag ~ 1 ms
         constant rmag  : real := 1.0;
 
-        constant c2    : real := 100.0e-6;   -- secondary DC-link capacitance
+        -- split-capacitor dividers : two caps per half-bridge. On the
+        -- primary a stiff Vdc1 source keeps vc1a + vc1b = Vdc1, so only the
+        -- midpoint moves; on the secondary vc2a + vc2b = Vdc2 is free and
+        -- carries the output (load across the pair).
+        constant cd1   : real := 470.0e-6;   -- each primary split cap
+        constant cd2   : real := 470.0e-6;   -- each secondary split cap
         variable rload : real := 40.0;       -- secondary load resistance
 
         -- each sub-interval is integrated as this many equal rk5 steps
         constant steps_per_segment : positive := 2;
 
-        -- (i1, i2, im, Vdc2). Output cap starts pre-charged to the setpoint.
-        constant init_state_vector : real_vector(0 to 3) :=
-            (0 => 0.0, 1 => 0.0, 2 => 0.0, 3 => vref);
+        -- (i1, i2, im, vc1a, vc1b, vc2a, vc2b). Split caps start balanced,
+        -- the secondary pair pre-charged so vc2a + vc2b = vref.
+        constant init_state_vector : real_vector(0 to 6) :=
+            (0 => 0.0, 1 => 0.0, 2 => 0.0,
+             3 => vdc1/2.0, 4 => vdc1/2.0, 5 => vref/2.0, 6 => vref/2.0);
 
         type sw_array is array (0 to n_legs-1) of bit;
 
@@ -185,39 +199,52 @@ begin
         variable cur_dir   : natural range 0 to 1 := 0;
         variable cur_seg   : seg_tick_array := (others => 0);
 
-        -- half-bridge modulation functions mp, ms in {-0.5, +0.5}
-        impure function mp return real is
-        begin return hb_modulator(sw_state(0)) - 0.5; end function;
-        impure function ms return real is
-        begin return hb_modulator(sw_state(1)) - 0.5; end function;
+        -- half-bridge high-side states hb_p, hb_s in {0.0, 1.0}
+        impure function hb_p return real is
+        begin return hb_modulator(sw_state(0)); end function;
+        impure function hb_s return real is
+        begin return hb_modulator(sw_state(1)); end function;
 
         impure function deriv_dhb(t : real; states : real_vector) return real_vector is
             variable retval  : states'subtype := (others => 0.0);
             variable v_p     : real;
             variable v_s_pri : real;   -- secondary bridge voltage, primary-referred
             variable vm      : real;   -- T-model midpoint node voltage
+            variable i_load  : real;
             variable ubranch : real_vector(1 to 3);
             constant lbranch : real_vector(1 to 3) := (lk1, lk2, lmag);
             alias i1   is states(0);
             alias i2   is states(1);
             alias im   is states(2);
-            alias vdc2 is states(3);
+            alias vc1a is states(3);   -- primary   : Vdc1+ to M1
+            alias vc1b is states(4);   -- primary   : M1 to 0
+            alias vc2a is states(5);   -- secondary : Vdc2+ to M2
+            alias vc2b is states(6);   -- secondary : M2 to 0
         begin
-            v_p     := mp * vdc1;                    -- +/- Vdc1/2
-            v_s_pri := ms * n_turns * vdc2;          -- +/- n*Vdc2/2
+            -- half-bridge output = switch node minus its split-cap midpoint
+            v_p     := hb_p * vc1a - (1.0 - hb_p) * vc1b;
+            v_s_pri := n_turns * (hb_s * vc2a - (1.0 - hb_s) * vc2b);
 
-            -- solve the midpoint voltage vm from KCL at m : the three branch
-            -- currents must satisfy d/dt(i1 - i2 - im) = 0, giving
+            -- T-model midpoint vm from KCL at m : d/dt(i1 - i2 - im) = 0,
             --   vm = (u1/Lk1 + u2/Lk2 + u3/Lmag) / (1/Lk1 + 1/Lk2 + 1/Lmag)
-            -- where u_k is each branch's driving voltage toward m.
             ubranch := (v_p - i1*r1, v_s_pri + i2*r2, im*rmag);
             vm := get_neutral_voltage(ubranch, lbranch);
 
             retval(0) := (v_p - vm - i1*r1)     / lk1;              -- d(i1)/dt   primary leakage
             retval(1) := (vm - v_s_pri - i2*r2) / lk2;              -- d(i2)/dt   secondary leakage
             retval(2) := (vm - im*rmag)         / lmag;             -- d(im)/dt   magnetizing
-            -- secondary DC current = P_sec / Vdc2 = (ms*n*Vdc2*i2)/Vdc2
-            retval(3) := (ms*n_turns*i2 - vdc2/rload) / c2;         -- d(Vdc2)/dt
+
+            -- primary split caps : i1 always enters the midpoint M1 and the
+            -- stiff source holds vc1a + vc1b = Vdc1, so it splits +/- i1/2.
+            retval(3) := -i1 / (2.0*cd1);                           -- d(vc1a)/dt
+            retval(4) :=  i1 / (2.0*cd1);                           -- d(vc1b)/dt
+
+            -- secondary split caps : the transformer current n*i2 is routed
+            -- to Vdc2+ (hs) or 0 (ls) by the secondary half-bridge, the load
+            -- sits across vc2a + vc2b.
+            i_load := (vc2a + vc2b) / rload;
+            retval(5) := (hb_s*n_turns*i2 - i_load)         / cd2;   -- d(vc2a)/dt
+            retval(6) := (-(1.0 - hb_s)*n_turns*i2 - i_load) / cd2;  -- d(vc2b)/dt
 
             return retval;
         end function;
@@ -238,7 +265,7 @@ begin
             sim_ready <= false;   -- default: sim_ready is a single-cycle pulse
 
             if not simulation_started then
-                write_plot_config(file_handler, "title", "Dual-active-half-bridge, single-phase-shift, T-model transformer");
+                write_plot_config(file_handler, "title", "Dual-active-half-bridge : SPS, T-model transformer, split-cap dividers");
                 write_plot_config(file_handler, "T_title", "Transformer branch currents (T model)");
                 write_plot_config(file_handler, "T_ylabel", "Current [A]");
                 write_plot_config(file_handler, "B_title", "Half-bridge voltages and secondary DC link");
@@ -250,6 +277,8 @@ begin
                 write_plot_config(file_handler, "label_B_u1", "Secondary half-bridge voltage (primary-referred)");
                 write_plot_config(file_handler, "label_B_u2", "Secondary DC-link voltage");
                 write_plot_config(file_handler, "label_B_u3", "Secondary DC-link setpoint");
+                write_plot_config(file_handler, "label_B_u4", "Primary split-cap midpoint");
+                write_plot_config(file_handler, "label_B_u5", "Secondary split-cap midpoint");
                 -- keep the square bridge voltages square with one rk5 step per sub-interval
                 write_plot_config(file_handler, "drawstyle_B_u0", "steps-pre");
                 write_plot_config(file_handler, "drawstyle_B_u1", "steps-pre");
@@ -262,6 +291,8 @@ begin
                 ,"B_u1"
                 ,"B_u2"
                 ,"B_u3"
+                ,"B_u4"
+                ,"B_u5"
                 ));
 
                 sim_ready          <= true;   -- kick off the first handshake
@@ -277,7 +308,7 @@ begin
             if seg_index = 0 then
                 cur_dir := dhb_dir;
                 cur_seg := dhb_seg_ticks;
-                vout    <= dhb_rk5(3);
+                vout    <= dhb_rk5(5) + dhb_rk5(6);   -- Vdc2 = vc2a + vc2b
             end if;
 
             -- switch state for this sub-interval, straight from the matrix
@@ -304,13 +335,15 @@ begin
 
             for s in 1 to steps_per_segment loop
                 write_to(file_handler,(to_seconds(now_ticks)
-                        , dhb_rk5(0)                     -- T_i0 : primary leakage current i1
-                        , dhb_rk5(1)                     -- T_i1 : secondary leakage current i2
-                        , dhb_rk5(2)                     -- T_i2 : magnetizing current im
-                        , mp * vdc1                      -- B_u0 : primary half-bridge voltage
-                        , ms * n_turns * dhb_rk5(3)      -- B_u1 : secondary half-bridge voltage (pri-ref)
-                        , dhb_rk5(3)                     -- B_u2 : secondary DC-link voltage
-                        , vref                           -- B_u3 : setpoint
+                        , dhb_rk5(0)                                                       -- T_i0 : i1
+                        , dhb_rk5(1)                                                       -- T_i1 : i2
+                        , dhb_rk5(2)                                                       -- T_i2 : im
+                        , hb_p*dhb_rk5(3) - (1.0-hb_p)*dhb_rk5(4)                          -- B_u0 : primary HB voltage
+                        , n_turns*(hb_s*dhb_rk5(5) - (1.0-hb_s)*dhb_rk5(6))                -- B_u1 : secondary HB voltage (pri-ref)
+                        , dhb_rk5(5) + dhb_rk5(6)                                          -- B_u2 : Vdc2 = vc2a + vc2b
+                        , vref                                                            -- B_u3 : setpoint
+                        , dhb_rk5(4)                                                       -- B_u4 : primary split-cap midpoint (vc1b)
+                        , dhb_rk5(6)                                                       -- B_u5 : secondary split-cap midpoint (vc2b)
                     ));
 
                 rk5(to_seconds(now_ticks), dhb_rk5, h);
