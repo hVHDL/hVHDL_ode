@@ -30,6 +30,7 @@ testbenches/
     multilevel/    fc_4level_tb, fc_4level_freq_tb, fc_5level_tb   (flying-capacitor buck-type)
     dcdc/          buck_converter_tb, boost_converter_tb          (synchronous 2-switch)
                    dab_converter_tb, dhb_converter_tb             (dual active [half-]bridge, SPS)
+                   llc_converter_tb                               (half-bridge LLC resonant, 400 -> 51 V)
     multiphase/    buck_3ph_tb, boost_3ph_tb                      (3-phase interleaved)
     dcac/          inverter_3ph_tb, inverter_3ph_svm_tb           (3-phase VSI + LC filter)
     acdc/          boost_pfc_tb                                   (single-phase boost PFC)
@@ -82,7 +83,13 @@ Shared conventions in the `converter/` testbenches:
 - `boost_pfc_tb` is a single-phase boost PFC: diode-bridge rectifier +
   boost stage, with a slow outer voltage PI setting the amplitude of a
   rectified-sine current reference that an inner current loop tracks
-  (unity power factor, ~2 % THD in the model).
+  (unity power factor, ~2 % THD in the model). Discontinuous conduction
+  near the line zero crossings is resolved with a bisection search for
+  the inductor-current zero crossing, not just clamped.
+- `llc_converter_tb` is a half-bridge LLC resonant converter regulated by
+  frequency (a PI moves f_sw around the series resonance). The Lr-Cr-Lm
+  tank is a 3-state ODE; the rectifier freewheel interval below resonance
+  is found with the same bisection search as the PFC's DCM.
 
 ## Running
 
