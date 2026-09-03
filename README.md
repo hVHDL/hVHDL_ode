@@ -29,7 +29,7 @@ testbenches/
   converter/       power-electronic converter switching models
     multilevel/    fc_4level_tb, fc_4level_freq_tb, fc_5level_tb   (flying-capacitor buck-type)
     dcdc/          buck_converter_tb, boost_converter_tb          (synchronous 2-switch)
-                   dab_converter_tb                               (dual active bridge, SPS)
+                   dab_converter_tb, dhb_converter_tb             (dual active [half-]bridge, SPS)
     multiphase/    buck_3ph_tb, boost_3ph_tb                      (3-phase interleaved)
     dcac/          inverter_3ph_tb, inverter_3ph_svm_tb           (3-phase VSI + LC filter)
 ```
@@ -73,9 +73,11 @@ Shared conventions in the `converter/` testbenches:
 - `inverter_3ph_svm_tb` builds the switching pattern from a switch-state
   matrix in the flying-capacitor style; `scheme` selects 7-segment SVPWM
   or the 5-segment minimal-commutation DPWMMIN matrix.
-- `dab_converter_tb` also uses a switch-state matrix: single-phase-shift
-  modulation of the two full bridges, with a PI loop on the phase-shift
-  fraction regulating the secondary DC-link voltage.
+- `dab_converter_tb` / `dhb_converter_tb` also use a switch-state matrix:
+  single-phase-shift modulation of the two (half-)bridges, with a PI loop
+  on the phase-shift fraction regulating the secondary DC-link voltage.
+  The transformer is a T model - the three branch currents are states and
+  the midpoint voltage is solved algebraically like the 3-phase neutral.
 
 ## Running
 
