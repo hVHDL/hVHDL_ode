@@ -141,7 +141,13 @@ begin
         -- trial integrations) to locate the zero crossing, integrate the real
         -- state only up to it, then hold iL = 0 (vL = 0) for the remainder.
         constant dcm_enable : boolean := true;
-        constant dcm_iters  : natural := 12;
+        constant dcm_iters  : natural := 14;
+        -- iL falling to this level during Q-off is treated as the DCM zero
+        -- crossing (the boost diode's forward drop stops conduction near
+        -- here anyway); the current is then held at 0 for the rest of the
+        -- switching period.
+        constant i_dcm_thr  : real    := 0.02;
+
 
         -- (iL, Vout). Output cap starts pre-charged to the rectified peak
         -- (the value it reaches through the bridge + boost diode before the
@@ -306,17 +312,19 @@ begin
 
             else
                 -- Q off with the boost diode conducting : the inductor
-                -- current has a negative slope. Test whether it reaches 0
-                -- within the off-time.
+                -- current has a negative slope. Test-integrate the full
+                -- off-time; if iL ends at or below i_dcm_thr it may have
+                -- reached 0, so search for the crossing.
                 trial := pfc_rk5;
                 run(trial, now_ticks, seg_ticks, steps_per_segment);
 
-                if trial(0) > 0.0 then
-                    -- stays positive : continuous conduction this period
+                if trial(0) > i_dcm_thr then
+                    -- iL still well above 0 at the end : continuous conduction
                     run_logged(seg_ticks, steps_per_segment);
                 else
-                    -- discontinuous : bisect the off-time for the length of
-                    -- the negative-slope (diode-conducting) sub-interval
+                    -- iL reaches the DCM level within the off-time : bisect
+                    -- for it. f_lo = largest fraction with iL still above the
+                    -- threshold, f_hi = smallest fraction at/below it.
                     f_lo := 0.0;
                     f_hi := 1.0;
                     for iter in 1 to dcm_iters loop
@@ -324,30 +332,35 @@ begin
                         trial := pfc_rk5;
                         run(trial, now_ticks,
                             natural(round(real(seg_ticks) * f_mid)), steps_per_segment);
-                        if trial(0) > 0.0 then
+                        if trial(0) > i_dcm_thr then
                             f_lo := f_mid;
                         else
                             f_hi := f_mid;
                         end if;
                     end loop;
 
-                    -- f_lo is the largest tested fraction with iL still > 0
-                    cond_ticks := natural(round(real(seg_ticks) * f_lo));
-                    if cond_ticks < 1         then cond_ticks := 1;         end if;
-                    if cond_ticks > seg_ticks then cond_ticks := seg_ticks; end if;
-                    idle_ticks := seg_ticks - cond_ticks;
+                    if f_hi > 0.999 then
+                        -- never actually reached the DCM level : still CCM
+                        run_logged(seg_ticks, steps_per_segment);
+                    else
+                        -- discontinuous : diode-conducting portion up to the
+                        -- crossing, then hold iL = 0 for the rest
+                        cond_ticks := natural(round(real(seg_ticks) * f_lo));
+                        if cond_ticks < 1         then cond_ticks := 1;         end if;
+                        if cond_ticks > seg_ticks then cond_ticks := seg_ticks; end if;
+                        idle_ticks := seg_ticks - cond_ticks;
 
-                    -- diode-conducting portion, up to the zero crossing
-                    run_logged(cond_ticks, steps_per_segment);
-                    pfc_rk5(0) := 0.0;   -- snap iL to exactly zero at the crossing
+                        run_logged(cond_ticks, steps_per_segment);
+                        pfc_rk5(0) := 0.0;   -- snap iL to exactly zero
 
-                    -- idle portion : vL = 0, iL = 0, Vout decays into the load.
-                    -- Log the two endpoints explicitly so the flat iL = 0
-                    -- segment is drawn for its full length in the plot.
-                    if idle_ticks > 0 then
+                        -- idle portion : vL = 0, iL = 0, Vout decays. Log
+                        -- both endpoints so the flat iL = 0 segment is drawn
+                        -- for its full length (an extra .dat row per DCM period).
                         log_row(to_seconds(now_ticks));                  -- zero crossing
-                        run(pfc_rk5, now_ticks, idle_ticks, 1);          -- decay Vout, iL held at 0
-                        now_ticks := now_ticks + idle_ticks;
+                        if idle_ticks > 0 then
+                            run(pfc_rk5, now_ticks, idle_ticks, 1);      -- decay Vout, iL held at 0
+                            now_ticks := now_ticks + idle_ticks;
+                        end if;
                         log_row(to_seconds(now_ticks));                  -- end of the idle interval
                     end if;
                 end if;
