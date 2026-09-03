@@ -75,13 +75,18 @@ architecture vunit_simulation of llc_converter_tb is
     signal realtime_ticks : natural := 0;
 
     constant vdc     : real := 400.0;      -- input DC-link voltage
-    constant n_turns : real := 3.92;       -- transformer turns ratio (200 / 51)
+    constant n_turns : real := 4.2;        -- transformer turns ratio
     constant vref    : real := 51.0;       -- output setpoint
 
-    -- frequency-control loop (PI on Vout -> switching frequency)
+    -- frequency-control loop (PI on Vout -> switching frequency). The tank
+    -- (n, Lr, Cr) is sized so the loop settles around 0.78*f_r : the
+    -- converter runs *below* resonance, so the resonant half-cycle finishes
+    -- before the switching half-period ends and the secondary current sits
+    -- at zero (rectifier freewheeling) for the rest of the half - the LLC
+    -- analogue of the boost PFC's discontinuous conduction.
     constant f_centre : real := 100.0e3;
-    constant f_min    : real := 70.0e3;
-    constant f_max    : real := 160.0e3;
+    constant f_min    : real := 55.0e3;
+    constant f_max    : real := 200.0e3;
     constant kf_p     : real := 1.5e3;     -- Hz per V
     constant kf_i     : real := 1.6e6;     -- Hz per V-s
 
@@ -119,9 +124,9 @@ begin
 
     stimulus : process(simulator_clock)
 
-        constant lr    : real := 50.0e-6;    -- series resonant inductor
-        constant cr    : real := 51.0e-9;    -- series resonant capacitor
-        constant lm    : real := 600.0e-6;   -- magnetizing inductance
+        constant lr    : real := 40.0e-6;    -- series resonant inductor
+        constant cr    : real := 38.0e-9;    -- series resonant capacitor  (f_r ~ 129 kHz)
+        constant lm    : real := 400.0e-6;   -- magnetizing inductance
         constant r_tank: real := 0.3;        -- tank loss (Lr ESR + winding)
         constant r_mag : real := 0.5;        -- bleeds the magnetizing DC offset (tau = Lm/r_mag)
         constant cout  : real := 470.0e-6;   -- output capacitor
