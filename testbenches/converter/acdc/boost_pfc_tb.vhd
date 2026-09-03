@@ -199,8 +199,10 @@ begin
 
         ----------------------------------------------------------------
         -- silent forward integration of `st` by `dticks` ticks in `nsub`
-        -- equal rk5 steps, starting the line-voltage clock at t0_ticks
-        -- (used for the DCM trial integrations)
+        -- equal rk5 steps, starting the line-voltage clock at t0_ticks.
+        -- Used for the DCM trial integrations : uses exactly the same
+        -- stepping as run_logged so the CCM/DCM decision it drives matches
+        -- what the committed integration actually does.
         procedure run(variable st : inout real_vector;
                       t0_ticks : natural; dticks : natural; nsub : positive) is
             variable hs : real;
@@ -212,9 +214,8 @@ begin
             end loop;
         end procedure;
         ----------------------------------------------------------------
-        -- write one plot row for the current real state at tick `tk`
-        procedure log_row(tk : natural) is
-            variable tn : real := to_seconds(tk);
+        -- write one plot row for the current real state at real time `tn`
+        procedure log_row(tn : real) is
         begin
             write_to(file_handler,(tn
                     , abs(v_pk * sin(2.0*MATH_PI*f_line*tn))                 -- T_i0 : rectified line voltage
@@ -225,22 +226,20 @@ begin
                 ));
         end procedure;
         ----------------------------------------------------------------
-        -- forward integration of the real state (pfc_rk5), advancing
-        -- now_ticks by exactly `dticks` and logging one row per step
+        -- forward integration of the real state (pfc_rk5) by `dticks` ticks
+        -- in `nsub` equal rk5 steps (matching run), logging a row per step
+        -- and advancing now_ticks by exactly `dticks`
         procedure run_logged(dticks : natural; nsub : positive) is
-            variable step : natural := 1;
-            variable remaining  : natural := dticks;
+            variable hs : real;
+            variable t0 : real := to_seconds(now_ticks);
         begin
             if dticks < 1 then return; end if;
-            step := dticks / nsub;
-            if step < 1 then step := 1; end if;
-            while remaining > 0 loop
-                if remaining < step then step := remaining; end if;
-                log_row(now_ticks);
-                rk5(to_seconds(now_ticks), pfc_rk5, to_seconds(step));
-                now_ticks := now_ticks + step;
-                remaining := remaining - step;
+            hs := to_seconds(dticks) / real(nsub);
+            for k in 0 to nsub-1 loop
+                log_row(t0 + real(k)*hs);
+                rk5(t0 + real(k)*hs, pfc_rk5, hs);
             end loop;
+            now_ticks := now_ticks + dticks;
         end procedure;
         ----------------------------------------------------------------
 
@@ -346,10 +345,10 @@ begin
                     -- Log the two endpoints explicitly so the flat iL = 0
                     -- segment is drawn for its full length in the plot.
                     if idle_ticks > 0 then
-                        log_row(now_ticks);                              -- zero crossing
+                        log_row(to_seconds(now_ticks));                  -- zero crossing
                         run(pfc_rk5, now_ticks, idle_ticks, 1);          -- decay Vout, iL held at 0
                         now_ticks := now_ticks + idle_ticks;
-                        log_row(now_ticks);                              -- end of the idle interval
+                        log_row(to_seconds(now_ticks));                  -- end of the idle interval
                     end if;
                 end if;
             end if;
