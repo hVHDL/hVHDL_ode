@@ -109,8 +109,10 @@ begin
                 write_plot_config(file_handler, "label_B_u0", "Bridge voltage");
                 write_plot_config(file_handler, "label_B_u1", "Capacitor voltage");
                 write_plot_config(file_handler, "xlim", "0,5e-3");
-                write_plot_config(file_handler, "T_ylim", "-4,4");
-                write_plot_config(file_handler, "B_ylim", "-0.3,0.3");
+                -- ylim to fit the large-signal excitation below (input_voltage
+                -- steps 1 V -> 2 V); leave commented to autoscale
+                write_plot_config(file_handler, "T_ylim", "-8,8");
+                write_plot_config(file_handler, "B_ylim", "-0.5,4.5");
 
                 -- bode plot
                 write_plot_config(file_handler, "combined_layout", "true");
