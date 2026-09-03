@@ -234,19 +234,41 @@ begin
         if rising_edge(simulator_clock) then
             simulation_counter <= simulation_counter + 1;
             if simulation_counter = 0 then
+                write_plot_config(file_handler, "title", "4-level flying-capacitor converter");
+                write_plot_config(file_handler, "T_title", "Inductor current and flying-cap balancing");
+                write_plot_config(file_handler, "T_ylabel", "Current [A]");
+                write_plot_config(file_handler, "B_title", "Bridge, output and flying-cap voltages");
+                write_plot_config(file_handler, "B_ylabel", "Voltage [V]");
+                write_plot_config(file_handler, "label_T_i0", "Inductor current");
+                write_plot_config(file_handler, "label_T_i1", "FC1 balancing integrator");
+                write_plot_config(file_handler, "label_T_i2", "FC2 balancing integrator");
+                write_plot_config(file_handler, "label_B_u0", "Output voltage");
+                write_plot_config(file_handler, "label_B_u1", "Flying-cap 1 voltage");
+                write_plot_config(file_handler, "label_B_u2", "Flying-cap 2 voltage");
+                write_plot_config(file_handler, "label_B_u3", "DC-link voltage");
+                write_plot_config(file_handler, "label_B_u4", "Modulator reference");
+
+                -- frequency response : the dither on the modulator reference
+                -- broadens its spectrum, so the reference-to-output and
+                -- reference-to-current transfer functions can be estimated
+                -- from a single run (see write_pkg / test_plot.py).
+                write_plot_config(file_handler, "combined_layout", "true");
+                write_plot_config(file_handler, "freq_unwrap_phase", "true");
                 write_plot_config(file_handler, "freq_fs", real'image(sw_frequency));
-                write_plot_config(file_handler, "freq_nperseg", "10000");
-                write_plot_config(file_handler, "freq_xlim", "1000,500000");
-                write_plot_config(file_handler, "freq_pair_iL", "B_u4,T_i0");
+                write_plot_config(file_handler, "freq_num_windows", "20");
+                write_plot_config(file_handler, "freq_xlim", "1000,300000");
+                write_plot_config(file_handler, "mag_ylim", "-60,20");
+                write_plot_config(file_handler, "phase_ylim", "-360,90");
+                write_plot_config(file_handler, "freq_title", "Modulator reference frequency response");
                 write_plot_config(file_handler, "freq_pair_uC", "B_u4,B_u0");
-                write_plot_config(file_handler, "label_iL", "Inductor current response");
-                write_plot_config(file_handler, "label_uC", "Capacitor voltage response");
+                write_plot_config(file_handler, "freq_pair_iL", "B_u4,T_i0");
+                write_plot_config(file_handler, "label_uC", "Reference -> output voltage");
+                write_plot_config(file_handler, "label_iL", "Reference -> inductor current");
 
                 init_simfile(file_handler, ("time"
                 ,"T_i0"
                 ,"T_i1"
                 ,"T_i2"
-                ,"T_i3"
                 ,"B_u0"
                 ,"B_u1"
                 ,"B_u2"
@@ -257,20 +279,14 @@ begin
             -------------------------
 
             write_to(file_handler,(realtime
-                    -- ,lcr_rk5(0)          -- ,"T_i0"
-                    -- ,avg_current_diff
-                    ,sw_integ(0) + udc/3.0    
-                    ,sw_integ(1) + udc*2.0/3.0
-                    ,lcr_rk5(2) -- ,"B_u1"
-                    ,lcr_rk5(3)          -- ,"B_u2"
-                    ,lcr_rk5(1)          -- ,"B_u0"
-                    ,lcr_rk5(2)          -- ,"B_u1"
-                    ,lcr_rk5(3)          -- ,"B_u2"
-                    ,udc                 -- ,"B_u3"
-                    ,modulator_reference -- ,"B_u4"
-                    -- ,sw_integ(2)
-                    -- ,sw_integ(3)
-                    -- ,sw_integ(4)
+                    ,lcr_rk5(0)          -- T_i0 : inductor current
+                    ,sw_integ(0)         -- T_i1 : FC1 balancing integrator
+                    ,sw_integ(1)         -- T_i2 : FC2 balancing integrator
+                    ,lcr_rk5(1)          -- B_u0 : output voltage
+                    ,lcr_rk5(2)          -- B_u1 : flying-cap 1
+                    ,lcr_rk5(3)          -- B_u2 : flying-cap 2
+                    ,udc                 -- B_u3 : DC link
+                    ,modulator_reference -- B_u4 : modulator reference
                 ));
 
             -- write_to(file_handler,(realtime
