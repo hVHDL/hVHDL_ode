@@ -48,9 +48,17 @@ procedure rk5 is new generic_rk5 generic map(deriv_lcr);
 rk5(t, state, stepsize);          -- advances `state` in place
 ```
 
-`generic_rk5` is the Dormand-Prince 5th-order pair; `am2_generic` /
-`am4_generic` are multi-step and take a history array. The adaptive
-variants in `adaptive_ode_pkg` size the step from an error estimate.
+`generic_rk5` is the Dormand-Prince 5(4) method (the `ode45` / `RK45`
+pair). `generic_tsit5` is the Tsitouras 5(4) method - smaller error
+constants, but slightly less stable on lightly damped resonant plants near
+the step limit (it diverges on the grid-inverter example), so it is an
+opt-in alternative. `generic_vern7` is Verner's "most efficient" 7(6)
+method (9 f-evals/step) for smooth high-accuracy work such as
+continuous-time model verification; it gives nothing on the PWM-switched
+converter models, whose discontinuous right-hand side caps the order at 1
+per step. `am2_generic` / `am4_generic` are multi-step and take a history
+array. The adaptive variants in `adaptive_ode_pkg` size the step from an
+error estimate.
 
 ## Converter testbenches
 

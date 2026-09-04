@@ -82,6 +82,11 @@ begin
 
         end function;
 
+        -- generic_rk5 is DOPRI5. Note: generic_tsit5 diverges on this model -
+        -- its L1-C1 stage is extremely lightly damped (zeta ~ 5e-3) and sampled
+        -- at omega*h ~ 0.95, right at the explicit-RK stability limit, where
+        -- Tsit5's stability polynomial is marginally amplifying on the imaginary
+        -- axis and builds up over the ~150k steps of this run.
         procedure rk is new generic_rk5 generic map(deriv_lcr);
 
         file file_handler : text open write_mode is "grid_inverter_model_tb.dat";

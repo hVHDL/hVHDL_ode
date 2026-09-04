@@ -62,6 +62,7 @@ begin
         procedure rk2 is new generic_rk2 generic map(deriv_lcr);
         procedure rk4 is new generic_rk4 generic map(deriv_lcr);
         procedure rk5 is new generic_rk5 generic map(deriv_lcr);
+        procedure vern7 is new generic_vern7 generic map(deriv_lcr);
 
         variable k2 : am_array := (others => (others => 0.0));
         procedure am2 is new am2_generic generic map(deriv_lcr);
@@ -73,6 +74,7 @@ begin
         variable lcr_rk2 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_rk4 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_rk5 : real_vector(0 to 1) := (0.0, 0.0);
+        variable lcr_ve7 : real_vector(0 to 1) := (0.0, 0.0);
 
         variable lcr_am2 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_am4 : real_vector(0 to 1) := (0.0, 0.0);
@@ -91,6 +93,8 @@ begin
                 ,"B_i1"
                 ,"B_i2"
                 ,"B_i3"
+                ,"T_v7"
+                ,"B_v7"
                 ));
             end if;
 
@@ -100,6 +104,7 @@ begin
                 rk2(realtime, lcr_rk2, timestep);
                 rk4(realtime, lcr_rk4, timestep);
                 rk5(realtime, lcr_rk5, timestep);
+                vern7(realtime, lcr_ve7, timestep);
 
                 am2(realtime, k2,lcr_am2, timestep);
                 am4(realtime, k4,lcr_am4, timestep);
@@ -114,8 +119,10 @@ begin
                         ,lcr_am4(0) 
                         ,lcr_rk4(1) 
                         ,lcr_rk5(1) 
-                        ,lcr_am2(1) 
+                        ,lcr_am2(1)
                         ,lcr_am4(1)
+                        ,lcr_ve7(0)
+                        ,lcr_ve7(1)
                     ));
 
             end if;
