@@ -11,8 +11,12 @@ context vunit_lib.vunit_context;
     use ode.write_pkg.all;
     use ode.ode_pkg.all;
 
--- Time-domain model of the LC EMI filter in misc/emi_filter_model.qsch,
--- built the same way as ode/testbenches/template_tb.vhd :
+-- Time-domain model of the LC EMI filter in misc/emi_filter_model.qsch.
+-- This is the VHDL leg of the worked model-verification example in
+-- misc/README.md : the same filter checked against a bench measurement
+-- three ways (measurement / QSPICE .ac / this hVHDL_ode RK4 run).
+--
+-- Built the same way as ode/testbenches/template_tb.vhd :
 --
 --   * deriv_lc() returns d/dt of the state vector for the circuit ODE
 --   * a fixed-step Runge-Kutta integrator (generic_rk4, instantiated with
@@ -142,11 +146,14 @@ begin
                 write_plot_config(file_handler, "freq_xlim", "5e2,1e5");
                 write_plot_config(file_handler, "mag_ylim", "-60,40");
                 write_plot_config(file_handler, "phase_ylim", "-220,20");
+                write_plot_config(file_handler, "freq_title",
+                    "LC EMI filter V(N04)/Vin : hVHDL_ode vs QSPICE vs measured");
                 write_plot_config(file_handler, "freq_pair_L1C1", "B_u0,B_u1");
                 write_plot_config(file_handler, "label_L1C1", "V(N04)/Vin  (hVHDL_ode)");
-                -- (add   freq_save_L1C1=<path>   here to dump the computed
-                --  response for overlaying onto a later test_plot.py run ;
-                --  misc/run_lc_ode.py does that comparison directly)
+                -- dump the RK4 response so it can be overlaid without re-running
+                -- the sim ; misc/README.md walks through the full three-way
+                -- (measured / QSPICE / hVHDL_ode) comparison
+                write_plot_config(file_handler, "freq_save_L1C1", "misc/lc_vhdl_resp.csv");
 
                 init_simfile(file_handler, ("time", "T_i0", "B_u0", "B_u1"));
             end if;

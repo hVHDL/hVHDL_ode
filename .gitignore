@@ -21,3 +21,9 @@ __pycache__
 *.utf8
 *.toml
 *.json
+
+# generated frequency-response artifacts of the misc/ verification example
+# (misc/L1C1_resp*.csv is the checked-in bench measurement, keep that)
+lc_vhdl_resp.csv
+lc_meas_resp.csv
+lc_qspice_resp.csv
