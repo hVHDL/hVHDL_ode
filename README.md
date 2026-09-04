@@ -60,6 +60,14 @@ per step. `am2_generic` / `am4_generic` are multi-step and take a history
 array. The adaptive variants in `adaptive_ode_pkg` size the step from an
 error estimate.
 
+`generic_trbdf2` is the odd one out: an implicit A- and L-stable 2nd-order
+method (trapezoidal + BDF2 sub-steps). It forms a finite-difference
+Jacobian of `deriv` and does a couple of Newton steps internally (one
+linear solve via `linalg_pkg`), so it stays bounded on stiff or very
+lightly damped plants stepped near / past the explicit-RK stability limit
+- the case where `generic_rk5` and friends blow up. Same instantiation and
+call as the others.
+
 ## Converter testbenches
 
 All of them model the power stage as an ODE integrated with a fixed-step

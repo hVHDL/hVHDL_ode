@@ -10,6 +10,7 @@ VU = VUnit.from_argv()
 ode = VU.add_library("ode")
 ode.add_source_files(ROOT / "write_pkg.vhd")
 ode.add_source_files(ROOT / "ode_solvers/real_vector_pkg.vhd")
+ode.add_source_files(ROOT / "ode_solvers/linalg_pkg.vhd")
 ode.add_source_files(ROOT / "ode_solvers/ode_pkg.vhd")
 ode.add_source_files(ROOT / "ode_solvers/adaptive_ode_pkg.vhd")
 

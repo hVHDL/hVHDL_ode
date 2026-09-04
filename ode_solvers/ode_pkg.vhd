@@ -68,6 +68,26 @@ package ode_pkg is
         ; state    : inout real_vector
         ; stepsize : in real);
 ------------------------------------------
+    -- generic_trbdf2 is the TR-BDF2 method (Bank et al. 1985): a trapezoidal
+    -- sub-step followed by a BDF2 sub-step, gamma = 2 - sqrt(2). It is A- and
+    -- L-stable and 2nd order, so - unlike the explicit RK methods above - it
+    -- stays bounded for stiff or very lightly damped plants integrated with a
+    -- large step, e.g. stepping over PWM sub-intervals near / past the
+    -- explicit-RK stability limit. Same usage as generic_rk5. The Jacobian of
+    -- `deriv` is approximated by finite differences at (t, state) and reused
+    -- for both sub-steps (simplified Newton); this is exact whenever `deriv`
+    -- is affine in the state, as it is within one converter switch state.
+    -- newton_iterations can be raised from the default if `deriv` is nonlinear.
+    procedure generic_trbdf2
+    generic(
+        impure function deriv (t : real; input : real_vector) return real_vector is <>
+        ; newton_iterations : positive := 2
+    )
+    (
+        t          : in real
+        ; state    : inout real_vector
+        ; stepsize : in real);
+------------------------------------------
     type am_state_array is array(natural range <>) of REAL_VECTOR;
     subtype am_array is am_state_array(1 to 4)(0 to 1);
 
@@ -93,6 +113,7 @@ end package ode_pkg;
 package body ode_pkg is
 
     use work.real_vector_pkg.all;
+    use work.linalg_pkg.all;
 
 ------------------------------------------
     procedure generic_rk1
@@ -350,6 +371,92 @@ package body ode_pkg is
             ) * h;
 
     end generic_vern7;
+------------------------------------------
+    -- TR-BDF2 (Bank, Coughran, Fichtner, Grosse, Rose, Smith 1985).
+    -- gamma = 2 - sqrt(2); d = gamma/2 makes both sub-steps share the
+    -- iteration matrix (I - d*h*J).
+    --   trapezoidal:  y_g - d*h*f(t+gamma*h, y_g) = y_n + d*h*f_n
+    --   BDF2:          y_1 - d*h*f(t+h, y_1)      = w1*y_g + w2*y_n
+    -- A- and L-stable, 2nd order. Verified numerically: order 2, |R(z)| < 1
+    -- for all Re(z) <= 0 and |R(z)| -> 0 as Re(z) -> -inf.
+    procedure generic_trbdf2
+    generic(
+        impure function deriv (t : real; input : real_vector) return real_vector is <>
+        ; newton_iterations : positive := 2
+    )
+    (
+        t          : in real
+        ; state    : inout real_vector
+        ; stepsize : in real
+    )
+    is
+        constant gamma : real := 2.0 - sqrt(2.0);
+        constant d     : real := gamma / 2.0;
+        constant w1    : real := (sqrt(2.0) + 1.0) / 2.0;
+        constant w2    : real := -(sqrt(2.0) - 1.0) / 2.0;
+        alias h is stepsize;
+
+        variable y_n   : real_vector(state'range) := state;
+        variable f_n   : real_vector(state'range);
+        variable f_y   : real_vector(state'range);
+        variable y     : real_vector(state'range);
+        variable y_g   : real_vector(state'range);
+        variable resid : real_vector(state'range);
+        variable yp    : real_vector(state'range);
+        variable jcol  : real_vector(state'range);
+        variable jac   : real_matrix(state'range, state'range);
+        variable mtx   : real_matrix(state'range, state'range);
+        variable eps_j : real;
+    begin
+        f_n := deriv(t, y_n);
+
+        -- finite-difference Jacobian  jac ~ d(deriv)/d(state)  at (t, y_n)
+        for col in state'range loop
+            eps_j := abs(y_n(col));
+            if eps_j < 1.0 then
+                eps_j := 1.0;
+            end if;
+            eps_j := 1.0e-8 * eps_j;
+
+            yp        := y_n;
+            yp(col)   := yp(col) + eps_j;
+            jcol      := (deriv(t, yp) - f_n) * (1.0 / eps_j);
+            for row in state'range loop
+                jac(row, col) := jcol(row);
+            end loop;
+        end loop;
+
+        -- shared iteration matrix  mtx = I - d*h*jac
+        for row in state'range loop
+            for col in state'range loop
+                if row = col then
+                    mtx(row, col) := 1.0 - d * h * jac(row, col);
+                else
+                    mtx(row, col) := - d * h * jac(row, col);
+                end if;
+            end loop;
+        end loop;
+
+        -- sub-step 1: trapezoidal rule over [t, t + gamma*h]
+        y := y_n + f_n * (gamma * h);
+        for i in 1 to newton_iterations loop
+            f_y   := deriv(t + gamma * h, y);
+            resid := y - y_n - (f_n + f_y) * (d * h);
+            y     := y - solve(mtx, resid);
+        end loop;
+        y_g := y;
+
+        -- sub-step 2: BDF2 over [t + gamma*h, t + h]
+        y := y_g;
+        for i in 1 to newton_iterations loop
+            f_y   := deriv(t + h, y);
+            resid := y - y_g * w1 - y_n * w2 - f_y * (d * h);
+            y     := y - solve(mtx, resid);
+        end loop;
+
+        state := y;
+
+    end generic_trbdf2;
 ------------------------------------------
     -- Dormand-Prince 5(4) ("DOPRI5"), the 5th-order formula of the pair - the
     -- method behind MATLAB's ode45 / SciPy's RK45. Default fixed-step 5th-order

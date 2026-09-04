@@ -63,6 +63,7 @@ begin
         procedure rk4 is new generic_rk4 generic map(deriv_lcr);
         procedure rk5 is new generic_rk5 generic map(deriv_lcr);
         procedure vern7 is new generic_vern7 generic map(deriv_lcr);
+        procedure trbdf2 is new generic_trbdf2 generic map(deriv_lcr);
 
         variable k2 : am_array := (others => (others => 0.0));
         procedure am2 is new am2_generic generic map(deriv_lcr);
@@ -75,6 +76,7 @@ begin
         variable lcr_rk4 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_rk5 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_ve7 : real_vector(0 to 1) := (0.0, 0.0);
+        variable lcr_trb : real_vector(0 to 1) := (0.0, 0.0);
 
         variable lcr_am2 : real_vector(0 to 1) := (0.0, 0.0);
         variable lcr_am4 : real_vector(0 to 1) := (0.0, 0.0);
@@ -95,6 +97,8 @@ begin
                 ,"B_i3"
                 ,"T_v7"
                 ,"B_v7"
+                ,"T_tb"
+                ,"B_tb"
                 ));
             end if;
 
@@ -105,6 +109,7 @@ begin
                 rk4(realtime, lcr_rk4, timestep);
                 rk5(realtime, lcr_rk5, timestep);
                 vern7(realtime, lcr_ve7, timestep);
+                trbdf2(realtime, lcr_trb, timestep);
 
                 am2(realtime, k2,lcr_am2, timestep);
                 am4(realtime, k4,lcr_am4, timestep);
@@ -123,6 +128,8 @@ begin
                         ,lcr_am4(1)
                         ,lcr_ve7(0)
                         ,lcr_ve7(1)
+                        ,lcr_trb(0)
+                        ,lcr_trb(1)
                     ));
 
             end if;
