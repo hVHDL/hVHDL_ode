@@ -1,14 +1,17 @@
 ----------------------------------
 -- 4-level flying-capacitor converter, switching model.
 --
--- Split into two processes like the other converter testbenches :
---   stimulus     - integrates the LCR + flying-cap plant with a fixed-step
---                  rk5, one switch sub-interval per handshake, and feeds
---                  the inductor current back to the modulator.
---   p_modulation - from the (dithered) modulator reference picks the row of
---                  fc_4_sw_matrix and the sub-interval length, runs the
---                  flying-cap balancing integrators, and steps Vdc / the
---                  reference on a schedule.
+-- Split into a stimulus process, a reference process and a modulator entity,
+-- joined by the usual sim_ready / modulation_ready handshake :
+--   stimulus            - integrates the LCR + flying-cap plant with a
+--                          fixed-step rk5, one switch sub-interval per
+--                          handshake, and feeds the inductor current back.
+--   p_reference         - builds the (dithered, scheduled) modulator
+--                          reference and the DC-link voltage, and hence the
+--                          0..1 duty_ratio command.
+--   fc_4level_modulator - takes that duty_ratio and, on each request, emits
+--                          the next switch pattern and the time to apply it.
+--
 -- The dither on the modulator reference broadens its spectrum so the
 -- reference-to-output / reference-to-current frequency responses can be
 -- estimated from the single run (see test_plot.py).
@@ -25,6 +28,7 @@ context vunit_lib.vunit_context;
     LIBRARY ode;
     use ode.write_pkg.all;
     use ode.ode_pkg.all;
+    use ode.fc_4level_modulator_pkg.all;
 
 entity fc_4level_tb is
   generic (runner_cfg : string);
@@ -40,45 +44,28 @@ architecture vunit_simulation of fc_4level_tb is
     signal realtime : real := 0.0;
     constant stoptime : real := 500.0e-3;
 
+    constant initial_dc_link : real := 200.0;
+
     constant sw_frequency : real := 1000.0e3;
     constant t_sw         : real := 1.0/sw_frequency;
 
-    subtype sw_states is bit_vector(2 downto 0);
+    constant pr : real := 0.0;   -- proportional current droop on the reference
 
-    -- stimulus <-> p_modulation handshake
-    signal sim_ready        : boolean := false;
-    signal modulation_ready : boolean := false;
-    -- p_modulation -> stimulus
-    signal mod_sw_state : sw_states := "111";
-    signal mod_step     : real      := t_sw*0.5;   -- sub-interval length [s]
-    signal udc_sig      : real      := 200.0;      -- DC-link voltage
-    signal mod_ref      : real      := 0.0;        -- modulator reference (for logging)
-    signal fc1_balance  : real      := 0.0;        -- flying-cap balancing integrators
-    signal fc2_balance  : real      := 0.0;
-    -- stimulus -> p_modulation
-    signal il_meas      : real      := 0.0;        -- inductor current feedback
+    -- stimulus -> p_reference -> modulator -> stimulus
+    signal sim_ready       : boolean := false;
+    signal reference_ready : boolean := false;
+    signal modulator_in    : fc_modulator_input_record  := fc_modulator_input_init;
+    signal modulator_out   : fc_modulator_output_record := fc_modulator_output_init;
+
+    -- p_reference outputs
+    signal udc_sig            : real := initial_dc_link;   -- DC-link voltage
+    signal modulator_reference : real := 66.666/2.0;       -- command / logging
+    signal duty_ratio         : real := (66.666/2.0)/initial_dc_link;
+    -- stimulus -> p_reference
+    signal il_meas            : real := 0.0;               -- inductor current feedback
 
     ----------------------
-    function fc_modulator(gate_signals : bit_vector) return real is
-        variable retval : real;
-    begin
-        CASE gate_signals is
-            WHEN "10" => retval := -1.0;
-            WHEN "01" => retval :=  1.0;
-            WHEN others => retval := 0.0;
-        end CASE;
-        return retval;
-    end fc_modulator;
-    ----------------------
-    function number_of_ones(vector : bit_vector) return natural is
-        variable retval : natural := 0;
-    begin
-        for i in vector'range loop
-            if vector(i) = '1' then retval := retval + 1; end if;
-        end loop;
-        return retval;
-    end number_of_ones;
-    ----------------------
+    -- bridge voltage of the 3-cell stack for a gate pattern (plant side)
     function get_fc_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
         variable bridge_voltage : real := 0.0;
     begin
@@ -88,29 +75,6 @@ architecture vunit_simulation of fc_4level_tb is
         bridge_voltage := bridge_voltage + fc_modulator('0' & sw_state(sw_state'high)) * udc;
         return bridge_voltage;
     end get_fc_bridge_voltage;
-    ----------------------
-    function get_fc_duty(vref : real; udc : real ; level_bits : bit_vector) return real is
-        variable retval : real := 0.0;
-        variable imax : natural := level_bits'high;
-        constant fc_vdiv : real := udc/real(imax+1);
-    begin
-        retval := vref/fc_vdiv;
-        for i in 1 to imax loop
-            if vref > real(i)*fc_vdiv then
-                retval := (vref - real(i)*fc_vdiv)/(fc_vdiv);
-            end if;
-        end loop;
-        return retval;
-    end get_fc_duty;
-    ----------------------
-    function get_next_step_length(t_sw : real; pwm : bit; duty : real) return real is
-    begin
-        if pwm = '1' then
-            return t_sw * duty;
-        else
-            return t_sw * (1.0 - duty);
-        end if;
-    end get_next_step_length;
     ----------------------
 
 begin
@@ -128,6 +92,11 @@ begin
 ------------------------------------------------------------------------
 
     stimulus : process(simulator_clock)
+
+        -- flat names for the modulator outputs this process consumes
+        alias mod_sw_state     is modulator_out.next_switch_pattern;
+        alias mod_step         is modulator_out.switching_time;
+        alias modulation_ready is modulator_out.modulation_ready;
 
         variable i_load : real := -10.0;
         constant l      : real := 10.0e-6;
@@ -170,13 +139,11 @@ begin
 
             if not simulation_started then
                 write_plot_config(file_handler, "title", "4-level flying-capacitor converter");
-                write_plot_config(file_handler, "T_title", "Inductor current and flying-cap balancing");
+                write_plot_config(file_handler, "T_title", "Inductor current");
                 write_plot_config(file_handler, "T_ylabel", "Current [A]");
                 write_plot_config(file_handler, "B_title", "Bridge, output and flying-cap voltages");
                 write_plot_config(file_handler, "B_ylabel", "Voltage [V]");
                 write_plot_config(file_handler, "label_T_i0", "Inductor current");
-                write_plot_config(file_handler, "label_T_i1", "FC1 balancing integrator");
-                write_plot_config(file_handler, "label_T_i2", "FC2 balancing integrator");
                 write_plot_config(file_handler, "label_B_u0", "Output voltage");
                 write_plot_config(file_handler, "label_B_u1", "Flying-cap 1 voltage");
                 write_plot_config(file_handler, "label_B_u2", "Flying-cap 2 voltage");
@@ -201,132 +168,87 @@ begin
                 write_plot_config(file_handler, "label_iL", "Reference -> inductor current");
 
                 init_simfile(file_handler, ("time"
-                ,"T_i0" ,"T_i1" ,"T_i2"
+                ,"T_i0"
                 ,"B_u0" ,"B_u1" ,"B_u2" ,"B_u3" ,"B_u4"
                 ));
 
                 sim_ready          <= true;   -- kick off the first handshake
                 simulation_started := true;
 
-        elsif modulation_ready then
-            simulation_counter <= simulation_counter + 1;
-            steplen := mod_step;
+            elsif modulation_ready then
+                simulation_counter <= simulation_counter + 1;
+                steplen := mod_step;
 
-            write_to(file_handler,(realtime
-                    , lcr_rk5(0)         -- T_i0 : inductor current
-                    , fc1_balance        -- T_i1 : FC1 balancing integrator
-                    , fc2_balance        -- T_i2 : FC2 balancing integrator
-                    , lcr_rk5(1)         -- B_u0 : output voltage
-                    , lcr_rk5(2)         -- B_u1 : flying-cap 1
-                    , lcr_rk5(3)         -- B_u2 : flying-cap 2
-                    , udc_sig            -- B_u3 : DC link
-                    , mod_ref            -- B_u4 : modulator reference
-                ));
+                write_to(file_handler,(realtime
+                        , lcr_rk5(0)          -- T_i0 : inductor current
+                        , lcr_rk5(1)          -- B_u0 : output voltage
+                        , lcr_rk5(2)          -- B_u1 : flying-cap 1
+                        , lcr_rk5(3)          -- B_u2 : flying-cap 2
+                        , udc_sig             -- B_u3 : DC link
+                        , modulator_reference -- B_u4 : modulator reference
+                    ));
 
-            rk5(realtime, lcr_rk5, steplen);
-            realtime <= realtime + steplen;
-            il_meas  <= lcr_rk5(0);
+                rk5(realtime, lcr_rk5, steplen);
+                realtime <= realtime + steplen;
+                il_meas  <= lcr_rk5(0);
 
-            -- output-voltage perturbation
-            if realtime < 400.0e-3 and realtime + steplen >= 400.0e-3 then
-                lcr_rk5(1) := lcr_rk5(1) - 50.0;
-            end if;
+                -- output-voltage perturbation
+                if realtime < 400.0e-3 and realtime + steplen >= 400.0e-3 then
+                    lcr_rk5(1) := lcr_rk5(1) - 50.0;
+                end if;
 
-            sim_ready <= true;
+                sim_ready <= true;
 
             end if; -- handshake
         end if; -- rising_edge
     end process stimulus;
 ------------------------------------------------------------------------
-    p_modulation : process(simulator_clock)
+    p_reference : process(simulator_clock)
 
         constant voltage_offset : real := 66.666/2.0;
 
-        variable udc : real := 200.0;
+        variable udc : real := initial_dc_link;
         variable seed1, seed2 : positive := 1;
         variable rand : real;
-        variable modulator_reference : real := 0.0;
-
-        variable level_bits        : bit_vector(2 downto 0) := (others => '0');
-        variable ones_in_low_state : natural range 0 to 2 := 0;
-
-        variable avg_current, avg_current_diff : real := 0.0;
-        variable prev_current, prev_avg_current : real := 0.0;
-        variable sw_integ : real_vector(0 to 1) := (others => 0.0);
-
-        variable pwm     : bit := '1';
-        variable fc_duty : real := 0.5;
-
-        type sw_vector    is array (natural range <>) of bit_vector;
-        type sw_seq_matrix is array (natural range <>) of sw_vector;
-        variable state_index : natural range 0 to 5 := 0;
-        constant fc_4_sw_matrix : sw_seq_matrix(0 to 2)(0 to 5)(0 to 2) := (
-            0 => ("001", "000", "010", "000", "100", "000"),
-            1 => ("011", "010", "110", "100", "101", "001"),
-            2 => ("111", "101", "111", "110", "111", "011"));
-        variable next_sw_state : sw_states;
-
+        variable reference : real := voltage_offset;
     begin
         if rising_edge(simulator_clock) then
-            modulation_ready <= false;
+            reference_ready <= false;
 
             if sim_ready then
                 -- dithered modulator reference, with scheduled steps
                 uniform(seed1, seed2, rand);
                 rand := ((rand - 0.5) * 2.0) * 1.0;
-                modulator_reference := voltage_offset + rand;
-                if realtime > 150.0e-3 then modulator_reference := 66.6666;  end if;
-                if realtime > 250.0e-3 then modulator_reference := 140.9999; end if;
+                reference := voltage_offset + rand;
+                if realtime > 150.0e-3 then reference := 66.6666;  end if;
+                if realtime > 250.0e-3 then reference := 140.9999; end if;
 
                 -- scheduled DC-link steps
                 if realtime > 100.0e-3 then udc := 150.0; end if;
                 if realtime > 300.0e-3 then udc := 300.0; end if;
 
-                -- output voltage level of the reference
-                level_bits := (others => '0');
-                if modulator_reference >= udc*0.0/3.0 then level_bits(0) := '1'; end if;
-                if modulator_reference >= udc*1.0/3.0 then level_bits(1) := '1'; end if;
-                if modulator_reference >= udc*2.0/3.0 then level_bits(2) := '1'; end if;
-                ones_in_low_state := number_of_ones(level_bits) - 1;
+                reference := reference - il_meas*pr;
 
-                -- fed-back inductor current -> average current change
-                avg_current      := (il_meas - prev_current)/2.0;
-                avg_current_diff := avg_current - prev_avg_current;
-                prev_avg_current := avg_current;
-                prev_current     := il_meas;
-
-                -- flying-cap balancing integrators (leaky), one per cell
-                CASE mod_sw_state(2 downto 1) is
-                    WHEN "01" => sw_integ(1) := sw_integ(1) - sw_integ(1)*80.0e-3 + avg_current_diff;
-                    WHEN "10" => sw_integ(1) := sw_integ(1) - sw_integ(1)*80.0e-3 - avg_current_diff;
-                    WHEN others => null;
-                end CASE;
-                CASE mod_sw_state(1 downto 0) is
-                    WHEN "01" => sw_integ(0) := sw_integ(0) - sw_integ(0)*80.0e-3 + avg_current_diff;
-                    WHEN "10" => sw_integ(0) := sw_integ(0) - sw_integ(0)*80.0e-3 - avg_current_diff;
-                    WHEN others => null;
-                end CASE;
-
-                -- walk the switch-state matrix
-                if state_index mod 2 = 0 then pwm := '1'; else pwm := '0'; end if;
-                next_sw_state := fc_4_sw_matrix(ones_in_low_state)(state_index);
-                if state_index < 5 then
-                    state_index := state_index + 1;
-                else
-                    state_index := 0;
-                end if;
-
-                fc_duty := get_fc_duty(modulator_reference, udc, level_bits);
-
-                mod_sw_state     <= next_sw_state;
-                mod_step         <= get_next_step_length(t_sw*2.0, pwm, fc_duty);
-                udc_sig          <= udc;
-                mod_ref          <= modulator_reference;
-                fc1_balance      <= sw_integ(0);
-                fc2_balance      <= sw_integ(1);
-                modulation_ready <= true;
+                modulator_reference <= reference;
+                udc_sig             <= udc;
+                duty_ratio          <= reference / udc;
+                reference_ready     <= true;
             end if;
         end if;
-    end process p_modulation;
+    end process p_reference;
+------------------------------------------------------------------------
+    -- fc_4level_modulator : one 0..1 duty over the whole 0..Udc output range,
+    -- no flying-cap balancing (switching_time_trim left at 0). The nominal
+    -- switching period is t_sw*2 so a full 6-state sequence spans one carrier.
+    modulator_in.modulation_requested <= reference_ready;
+    modulator_in.duty_ratio           <= duty_ratio;
+    modulator_in.switching_time_trim  <= (others => 0.0);
+    modulator_in.t_sw                 <= t_sw*2.0;
+
+    u_modulator : entity ode.fc_4level_modulator
+        port map (
+            clock         => simulator_clock,
+            modulator_in  => modulator_in,
+            modulator_out => modulator_out);
 ------------------------------------------------------------------------
 end vunit_simulation;

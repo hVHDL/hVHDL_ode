@@ -27,7 +27,11 @@ ode.add_source_files(ROOT / "testbenches/sort_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/template_tb.vhd")
 
 # converter switching-model testbenches
+ode.add_source_files(ROOT / "testbenches/converter/multilevel/fc_4level_modulator_pkg.vhd")
+ode.add_source_files(ROOT / "testbenches/converter/multilevel/fc_4level_modulator.vhd")
 ode.add_source_files(ROOT / "testbenches/converter/multilevel/fc_4level_tb.vhd")
+ode.add_source_files(ROOT / "testbenches/converter/multilevel/fc_5level_modulator_pkg.vhd")
+ode.add_source_files(ROOT / "testbenches/converter/multilevel/fc_5level_modulator.vhd")
 ode.add_source_files(ROOT / "testbenches/converter/multilevel/fc_5level_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/converter/dcdc/buck_converter_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/converter/dcdc/boost_converter_tb.vhd")
