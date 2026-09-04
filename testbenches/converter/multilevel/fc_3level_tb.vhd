@@ -30,6 +30,7 @@ context vunit_lib.vunit_context;
     LIBRARY ode;
     use ode.write_pkg.all;
     use ode.ode_pkg.all;
+    use ode.fc_modulator_common_pkg.all;
     use ode.fc_3level_modulator_pkg.all;
 
 entity fc_3level_tb is
@@ -65,19 +66,6 @@ architecture vunit_simulation of fc_3level_tb is
     signal duty_ratio          : real := 0.25;
     -- stimulus -> p_reference
     signal il_meas             : real := 0.0;                  -- inductor current feedback
-
-    ----------------------
-    -- bridge voltage of the 2-cell stack for a gate pattern (plant side)
-    function get_fc_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
-        variable bridge_voltage : real := 0.0;
-    begin
-        for i in ufc'range loop
-            bridge_voltage := bridge_voltage + fc_modulator(sw_state(i+1 downto i)) * ufc(i);
-        end loop;
-        bridge_voltage := bridge_voltage + fc_modulator('0' & sw_state(sw_state'high)) * udc;
-        return bridge_voltage;
-    end get_fc_bridge_voltage;
-    ----------------------
 
 begin
 

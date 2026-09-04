@@ -11,7 +11,7 @@
 --                           next switch pattern and the time to apply it.
 --
 -- Open-loop : no flying-cap balancing (switching_time_trim left at 0). The
--- modulator still carries that hook, and fc_5level_modulator_pkg.get_fc_trims
+-- modulator still carries that hook, and fc_modulator_common_pkg.get_fc_trims
 -- can fill it from the measured cap errors if a balancing run is wanted.
 ----------------------------------
 LIBRARY ieee  ;
@@ -26,6 +26,7 @@ context vunit_lib.vunit_context;
     LIBRARY ode;
     use ode.write_pkg.all;
     use ode.ode_pkg.all;
+    use ode.fc_modulator_common_pkg.all;
     use ode.fc_5level_modulator_pkg.all;
 
 entity fc_5level_tb is
@@ -61,19 +62,6 @@ architecture vunit_simulation of fc_5level_tb is
     -- modulator command : one 0..1 duty over the whole 0..Udc output range
     signal modulator_reference : real := initial_voltage_ref;   -- logging / command
     signal duty_ratio          : real := initial_voltage_ref/initial_dc_link;
-
-    ----------------------
-    -- bridge voltage of the 4-cell stack for a gate pattern (plant side)
-    function get_fc_bridge_voltage(sw_state : sw_states ; udc : real; ufc : real_vector) return real is
-        variable bridge_voltage : real := 0.0;
-    begin
-        for i in ufc'range loop
-            bridge_voltage := bridge_voltage + fc_modulator(sw_state(i+1 downto i)) * ufc(i);
-        end loop;
-        bridge_voltage := bridge_voltage + fc_modulator('0' & sw_state(sw_state'high)) * udc;
-        return bridge_voltage;
-    end get_fc_bridge_voltage;
-    ----------------------
 
 begin
 

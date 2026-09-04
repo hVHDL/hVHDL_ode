@@ -75,8 +75,10 @@ Shared conventions in the `converter/` testbenches:
   flying-capacitor converters (2 / 3 / 4 switch cells): the plant is the LC
   load plus one ODE state per flying cap, and a clocked `fc_Nlevel_modulator`
   entity turns a single `0..1` `duty_ratio` over the whole `0..Udc` range
-  into the switch-state sequence — `to_level` picks the row of
-  `fc_N_sw_matrix`, its fractional part is the within-level duty.
+  into the switch-state sequence — `to_level` picks the row of `fc_sw_matrix`,
+  its fractional part is the within-level duty. The modulation code is shared
+  in `fc_modulator_common_pkg`; each `fc_Nlevel_modulator_pkg` holds only the
+  cell count, the level-sized subtypes, that matrix and the port records.
   `switching_time_trim` is a per-state dwell hook for flying-cap balancing
   (`get_fc_trims` fills it from the cap-voltage errors); the testbenches
   leave it at 0 and run open loop. `fc_3level_tb` / `fc_4level_tb` keep a
