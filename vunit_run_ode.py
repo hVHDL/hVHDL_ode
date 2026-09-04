@@ -25,6 +25,7 @@ ode.add_source_files(ROOT / "ode_examples/grid_inverter_control_tb.vhd")
 
 ode.add_source_files(ROOT / "testbenches/sort_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/template_tb.vhd")
+ode.add_source_files(ROOT / "misc/lc_filter_ode_tb.vhd")
 
 # converter switching-model testbenches
 ode.add_source_files(ROOT / "testbenches/converter/multilevel/fc_3level_modulator_pkg.vhd")

@@ -38,7 +38,10 @@ def read_plot_config(filename):
     # freq_pair_<name>, freq_fs, freq_nperseg (or
     # freq_num_windows to split the data into N segments instead of
     # specifying segment length directly), freq_xlim, mag_ylim, phase_ylim,
-    # freq_title, freq_unwrap_phase=true, freq_save_<name>=<path> to save
+    # freq_title, freq_unwrap_phase=true, freq_deskew (zoh or <samples>,
+    # removes the half-sample zero-order-hold group delay a fixed-step ODE
+    # testbench's sample-and-held stimulus adds to the estimated phase),
+    # freq_save_<name>=<path> to save
     # that pair's computed response to a file (see save_freq_response,
     # is_saved_freq_response) for overlaying onto a later plot, for
     # frequency response plots (see parse_freq_pairs/plot_freq_response),
@@ -176,6 +179,7 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, saved_response
     from freq_response import freq_response
 
     unwrap_phase = is_true(config.get("freq_unwrap_phase", "false"))
+    deskew = config.get("freq_deskew", 0.0)
 
     if freq_pairs:
         for filename, df in loaded:
@@ -199,7 +203,7 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, saved_response
                 if x_col not in df.columns or y_col not in df.columns:
                     continue
                 try:
-                    f, h, _ = freq_response(df[x_col], df[y_col], fs=fs, nperseg=nperseg)
+                    f, h, _ = freq_response(df[x_col], df[y_col], fs=fs, nperseg=nperseg, deskew=deskew)
                 except Exception as e:
                     print(f"Could not compute frequency response for '{name}' in '{filename}': {e}. Skipping.")
                     continue
@@ -371,6 +375,14 @@ if __name__ == "__main__":
     parser.add_argument("--freq-fs", metavar="HZ",
                          help="Sampling frequency for the frequency response. Optional: if omitted, "
                               "it's inferred from the file's time column.")
+    parser.add_argument("--freq-deskew", nargs="?", const="zoh", metavar="zoh|SAMPLES",
+                         help="Remove a bulk transport delay (phase that droops linearly with "
+                              "frequency) from the estimated response. A fixed-step ODE testbench "
+                              "samples and holds its stimulus once per timestep, which adds a "
+                              "half-sample zero-order-hold group delay the real circuit does not "
+                              "have; bare --freq-deskew (or 'zoh') removes exactly that, a number "
+                              "removes that many samples. Same effect as the testbench's "
+                              "freq_deskew config.")
     args = parser.parse_args()
 
     config_overrides = {}
@@ -390,6 +402,9 @@ if __name__ == "__main__":
 
     if args.freq_fs:
         config_overrides["freq_fs"] = args.freq_fs
+
+    if args.freq_deskew is not None:
+        config_overrides["freq_deskew"] = args.freq_deskew
 
     for item in args.drawstyle:
         if "=" in item:

@@ -2,11 +2,34 @@ import numpy as np
 from scipy import signal
 
 
-def freq_response(x, y, fs=1.0, nperseg=1024, window='flattop', 
-                      scaling='spectrum', detrend='constant'):
+def _resolve_deskew(deskew, fs):
+    """Turn the ``deskew`` argument into a delay in seconds to *advance* H by.
+
+    Accepts a number (samples), ``'zoh'``/``True`` (half a sample, the
+    zero-order-hold group delay of a sample-and-held stimulus), or a falsey /
+    ``'off'`` value for no correction. There is deliberately no 'auto' mode:
+    near a resonance the sampling transport delay and the circuit's own group
+    delay are the same measurement, so the artifact can only be removed from
+    its known analytic value (T/2 for a once-per-timestep sample and hold)."""
+    if deskew is None or deskew is False:
+        return 0.0
+    if deskew is True:
+        return 0.5 / fs
+    if isinstance(deskew, str):
+        key = deskew.strip().lower()
+        if key in ('', 'off', 'none', 'false', '0'):
+            return 0.0
+        if key in ('zoh', 'half', 'true'):
+            return 0.5 / fs
+        return float(key) / fs
+    return float(deskew) / fs
+
+
+def freq_response(x, y, fs=1.0, nperseg=1024, window='flattop',
+                      scaling='spectrum', detrend='constant', deskew=0.0):
     """
     Estimate frequency response H(f) = Y(f)/X(f) using cross power spectral density
-    
+
     Parameters:
     -----------
     x : array_like
@@ -23,6 +46,13 @@ def freq_response(x, y, fs=1.0, nperseg=1024, window='flattop',
         Selects between power spectrum ('spectrum') and power spectral density ('density')
     detrend : {'constant', 'linear', False}, optional
         Detrending applied to each segment
+    deskew : number or {'zoh', 'off'}, optional
+        Remove a bulk transport delay from the estimate (a phase that droops
+        linearly with frequency). A fixed-step ODE testbench that samples and
+        holds its stimulus once per timestep feeds the Welch estimator a
+        half-sample (T/2) zero-order-hold group delay that the true circuit
+        does not have; ``'zoh'`` (or ``True``) removes exactly that, a number
+        removes that many samples. Default 0.0 (no correction).
 
     Returns:
     --------
@@ -52,7 +82,13 @@ def freq_response(x, y, fs=1.0, nperseg=1024, window='flattop',
     f, Pyy = signal.welch(y, fs=fs, window=window, nperseg=nperseg,
                          scaling=scaling, detrend=detrend)
     coh = np.abs(Pxy)**2 / (Pxx * Pyy)
-    
+
+    tau = _resolve_deskew(deskew, fs)
+    if tau:
+        H = H * np.exp(2j * np.pi * f * tau)
+        print(f"    freq_response: de-skewed {tau * fs:+.3f} sample "
+              f"({tau * 1e9:+.0f} ns) bulk delay out of the phase")
+
     return f, H, coh
 
 
