@@ -69,7 +69,19 @@ Shared conventions in the `converter/` testbenches:
 - A `stimulus` / `p_modulation` process pair with a
   `sim_ready` / `modulation_ready` handshake: `stimulus` integrates one
   sub-interval, then asks `p_modulation` for the next duty / modulator
-  solution.
+  solution. The `multilevel/` testbenches split that modulator out into a
+  clocked entity (see below).
+- `multilevel/` `fc_3level_tb` / `fc_4level_tb` / `fc_5level_tb` are
+  flying-capacitor converters (2 / 3 / 4 switch cells): the plant is the LC
+  load plus one ODE state per flying cap, and a clocked `fc_Nlevel_modulator`
+  entity turns a single `0..1` `duty_ratio` over the whole `0..Udc` range
+  into the switch-state sequence — `to_level` picks the row of
+  `fc_N_sw_matrix`, its fractional part is the within-level duty.
+  `switching_time_trim` is a per-state dwell hook for flying-cap balancing
+  (`get_fc_trims` fills it from the cap-voltage errors); the testbenches
+  leave it at 0 and run open loop. `fc_3level_tb` / `fc_4level_tb` keep a
+  dithered reference for the reference-to-output / reference-to-current
+  frequency response.
 - `multiphase/` and `dcac/` use a grid-locked edge scheduler so the phase
   relationship does not drift over long runs.
 - `inverter_3ph_svm_tb` builds the switching pattern from a switch-state
