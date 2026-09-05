@@ -378,9 +378,10 @@ package body adaptive_ode_pkg is
         constant b4 : real := 125.0/192.0;
         constant b5 : real := -2187.0/6784.0;
         constant b6 : real := 11.0/84.0;
-        -- 5th-order minus embedded 4th-order weights -> error estimate
-        -- ei = b_i - bhat_i. NB: written to avoid the literal pattern
-        -- "0.0 - x", which nvc 1.18.2 folds to "+x" (constant-folding bug).
+        -- ei = b_i - bhat_i (5th-order minus embedded 4th-order weights).
+        -- e7 is written as -(x) rather than 0.0 - x: nvc <= 1.18.2 folds the
+        -- static expression "0.0 - x" to "+x" (constant-folding bug, fixed in
+        -- nvc 1.22).
         constant e1 : real := 35.0/384.0     - 5179.0/57600.0;
         constant e3 : real := 500.0/1113.0   - 7571.0/16695.0;
         constant e4 : real := 125.0/192.0    - 393.0/640.0;
