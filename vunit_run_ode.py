@@ -20,6 +20,7 @@ ode.add_source_files(ROOT / "testbenches/lcr_models_pkg.vhd")
 ode.add_source_files(ROOT / "testbenches/lcr_simulation_rk4_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/lcr_3ph_tb.vhd")
 ode.add_source_files(ROOT / "testbenches/lcr_3ph_adaptive_tb.vhd")
+ode.add_source_files(ROOT / "testbenches/lcr_adaptive_dense_tb.vhd")
 
 ode.add_source_files(ROOT / "ode_examples/grid_inverter_model_pkg.vhd")
 ode.add_source_files(ROOT / "ode_examples/grid_inverter_control_tb.vhd")

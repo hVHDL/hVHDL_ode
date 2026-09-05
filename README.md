@@ -15,9 +15,10 @@ The `testbenches/converter/` switching models, the reorganization, and the
 
 ```
 ode_solvers/       integrator packages
-  ode_pkg.vhd            fixed-step  generic_rk1/rk2/rk4/rk5, am2/am4 (generic over `deriv`)
-  adaptive_ode_pkg.vhd   adaptive    generic_adaptive_rk23 / _dopri54
+  ode_pkg.vhd            fixed-step  generic_rk1/rk2/rk4/rk5, tsit5, vern7, trbdf2, am2/am4
+  adaptive_ode_pkg.vhd   adaptive    generic_adaptive_rk23 / _dopri54 / _dopri5 (+ dense output)
   real_vector_pkg.vhd    real_vector arithmetic used by the solvers
+  linalg_pkg.vhd         real_matrix + solve() (used by the implicit solvers)
   sort_pkg.vhd
 write_pkg.vhd      write_to / init_simfile / write_plot_config -> whitespace .dat + "#CONFIG" lines
 python/            test_plot.py (time-domain + Bode from a .dat), freq_response.py, qspice helpers
@@ -67,6 +68,24 @@ linear solve via `linalg_pkg`), so it stays bounded on stiff or very
 lightly damped plants stepped near / past the explicit-RK stability limit
 - the case where `generic_rk5` and friends blow up. Same instantiation and
 call as the others.
+
+### Adaptive DOPRI5 with dense output
+
+`generic_adaptive_dopri5` is a cleaner Dormand-Prince 5(4) than
+`generic_adaptive_dopri54`: proper FSAL (k7 carried into the next step),
+the standard embedded 4th-order error estimate, and `tolerance` as a
+generic. Each call takes one error-controlled step and also returns the
+coefficients of the DOPRI5 *continuous extension* for that step.
+
+`dopri5_dense(theta, cont)` evaluates that continuous extension anywhere in
+the step (`theta` in `[0, 1]`), so the solution can be sampled at times
+that have nothing to do with the adaptive step points.
+
+`generic_dopri5_uniform_log` wraps the two: it integrates `[t_start,
+t_end]` with adaptive steps but calls a `log_sample(t, state)` callback on
+a fixed uniform grid, interpolating each sample. `lcr_adaptive_dense_tb`
+uses it to write a uniformly sampled `.dat` from an adaptively stepped
+run.
 
 ## Converter testbenches
 
