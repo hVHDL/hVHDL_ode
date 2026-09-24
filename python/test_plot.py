@@ -175,11 +175,29 @@ def plot_time_domain(loaded, config, signal_labels, ax_top, ax_bottom):
     if b_ylim:
         ax_bottom.set_ylim(*b_ylim)
 
+def unwrap_from_visible(f, phase, freq_xlim):
+    # np.unwrap anchors at the first element, which is the 0 Hz bin: its
+    # phase is meaningless (0 or 180 deg for a real cross spectrum), so
+    # anchoring there can offset the whole curve by a multiple of 360 deg.
+    # Anchor at the first bin that is actually plotted instead - the lower
+    # freq_xlim bound, or the first bin above 0 Hz - and unwrap outward in
+    # both directions from it.
+    low = freq_xlim[0] if freq_xlim else 0.0
+    visible = np.nonzero((f > 0) & (f >= low))[0]
+    if len(visible) == 0:
+        return np.unwrap(phase)
+    start = visible[0]
+    out = np.array(phase, dtype=float, copy=True)
+    out[start:] = np.unwrap(phase[start:])
+    out[:start + 1] = np.unwrap(phase[start::-1])[::-1]
+    return out
+
 def plot_freq_response(loaded, config, freq_pairs, signal_labels, saved_responses, ax_mag, ax_phase):
     from freq_response import freq_response
 
     unwrap_phase = is_true(config.get("freq_unwrap_phase", "false"))
     deskew = config.get("freq_deskew", 0.0)
+    freq_xlim = parse_limit_pair(config, "freq_xlim")
 
     if freq_pairs:
         for filename, df in loaded:
@@ -213,7 +231,7 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, saved_response
                     label = f"{label} ({filename})"
                 phase = np.angle(h)
                 if unwrap_phase:
-                    phase = np.unwrap(phase)
+                    phase = unwrap_from_visible(f, phase, freq_xlim)
                 mag_db = 20 * np.log10(np.abs(h))
                 phase_deg = np.degrees(phase)
                 ax_mag.semilogx(f, mag_db, label=label)
@@ -229,7 +247,6 @@ def plot_freq_response(loaded, config, freq_pairs, signal_labels, saved_response
         ax_mag.semilogx(f, mag_db, label=label, linestyle="--")
         ax_phase.semilogx(f, phase_deg, label=label, linestyle="--")
 
-    freq_xlim = parse_limit_pair(config, "freq_xlim")
     if freq_xlim:
         ax_mag.set_xlim(*freq_xlim)
 
