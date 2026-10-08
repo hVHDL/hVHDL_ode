@@ -1,3 +1,4 @@
+import fnmatch
 import os
 import re
 import numpy as np
@@ -46,7 +47,10 @@ def read_plot_config(filename):
     # is_saved_freq_response) for overlaying onto a later plot, for
     # frequency response plots (see parse_freq_pairs/plot_freq_response),
     # and combined_layout=true to put the time-domain and frequency
-    # response plots in one 2x2 figure.
+    # response plots in one 2x2 figure. freq_select and signal_select
+    # (comma separated names, shell-style wildcards allowed) plot only the
+    # freq_pair_<name> pairs and time-domain columns they match, see
+    # select_names.
     config = {}
     with open(filename) as f:
         for line in f:
@@ -103,6 +107,19 @@ def parse_freq_pairs(config):
             print(f"Warning: freq_pair_{name} must be 'x_column,y_column', got '{value}'. Skipping.")
     return pairs
 
+def select_names(names, config, key):
+    # The names that config[key] selects: a comma separated list of names
+    # or shell-style wildcard patterns (e.g. "um,uc" or "T_i*"). Without the
+    # key, all of them. Patterns that match nothing are reported, so a
+    # mistyped name does not silently empty the plot.
+    if not config.get(key):
+        return list(names)
+    patterns = [p.strip() for p in config[key].split(",") if p.strip()]
+    for pattern in patterns:
+        if not any(fnmatch.fnmatchcase(name, pattern) for name in names):
+            print(f"Warning: {key} '{pattern}' matches none of: {', '.join(names) or '(none)'}")
+    return [name for name in names if any(fnmatch.fnmatchcase(name, p) for p in patterns)]
+
 def is_true(value):
     return str(value).strip().lower() in ("1", "true", "yes")
 
@@ -146,6 +163,9 @@ def plot_time_domain(loaded, config, signal_labels, ax_top, ax_bottom):
     for filename, df in loaded:
         for ax, prefix, title_key, ylabel_key, default_title, default_ylabel in subplots:
             columns = [col for col in df.columns if col.startswith(prefix + "_")]
+            if "signal_select" in config:
+                selected = select_names(list(df.columns), config, "signal_select")
+                columns = [col for col in columns if col in selected]
             if not columns:
                 continue
             time = df.index.to_numpy()
@@ -322,6 +342,8 @@ def plot_data(filenames, config_overrides=None, freq_only=False):
     }
 
     freq_pairs = parse_freq_pairs(config)
+    selected_pairs = select_names([name for name, _, _ in freq_pairs], config, "freq_select")
+    freq_pairs = [pair for pair in freq_pairs if pair[0] in selected_pairs]
     has_freq = bool(freq_pairs) or bool(saved_responses)
 
     # Nothing time-domain to show (e.g. only saved frequency-response
@@ -389,6 +411,14 @@ if __name__ == "__main__":
                          help="Add a frequency response pair from X_COL to Y_COL (repeatable). Same "
                               "effect as the testbench's freq_pair_NAME config, but set from the "
                               "command line instead, so it works even without a #CONFIG line.")
+    parser.add_argument("--pairs", action="append", default=[], metavar="NAME[,NAME...]",
+                         help="Plot only these frequency response pairs, by their freq_pair_NAME (or "
+                              "--freq-pair) names; shell-style wildcards allowed (e.g. 'u*'). Repeatable. "
+                              "Saved response files given as arguments are always plotted. Same effect "
+                              "as the testbench's freq_select config.")
+    parser.add_argument("--signals", action="append", default=[], metavar="COL[,COL...]",
+                         help="Plot only these time-domain columns (e.g. T_i0,B_um or 'T_i*'). "
+                              "Repeatable. Same effect as the testbench's signal_select config.")
     parser.add_argument("--freq-fs", metavar="HZ",
                          help="Sampling frequency for the frequency response. Optional: if omitted, "
                               "it's inferred from the file's time column.")
@@ -416,6 +446,12 @@ if __name__ == "__main__":
             continue
         name, cols = item.split("=", 1)
         config_overrides[f"freq_pair_{name.strip()}"] = cols.strip()
+
+    if args.pairs:
+        config_overrides["freq_select"] = ",".join(args.pairs)
+
+    if args.signals:
+        config_overrides["signal_select"] = ",".join(args.signals)
 
     if args.freq_fs:
         config_overrides["freq_fs"] = args.freq_fs
