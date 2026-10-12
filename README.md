@@ -23,6 +23,8 @@ ode_solvers/       integrator packages
 write_pkg.vhd      write_to / init_simfile / write_plot_config -> whitespace .dat + "#CONFIG" lines
 python/            test_plot.py (time-domain + Bode from a .dat), freq_response.py, qspice helpers
 qspice_ref_models/ QSPICE schematics used as reference for some models
+ngspice_ref_models/ fc_5level.py : ngspice switch-circuit netlist of fc_5level_tb, built from
+                   fc_sw_matrix, run and compared against fc_5level_tb.dat
 ode_examples/      grid_inverter_control_tb  (worked control-loop example)
 testbenches/
   lcr_*            LC / LCR filter integration tests (fixed vs adaptive, single- and 3-phase)
