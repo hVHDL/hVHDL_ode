@@ -27,3 +27,6 @@ __pycache__
 lc_vhdl_resp.csv
 lc_meas_resp.csv
 lc_qspice_resp.csv
+
+# ngspice reference model outputs
+ngspice_ref_models/out/
